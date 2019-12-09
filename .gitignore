@@ -19,6 +19,5 @@ doc/DOC.md
 /data
 /output
 /well_trained
-model/layers.py
-model/tagat.py
+
 
