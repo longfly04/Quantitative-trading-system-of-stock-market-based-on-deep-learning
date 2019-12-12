@@ -5,9 +5,9 @@ import pandas as pd
 Stock类 定义股票基本参数
 Trade类 定义交易的基本参数
 Company类 定义上市公司基本参数
-
-
 '''
+
+TOKEN_PATH = 'utils\\base\\token.tkn'
 
 class Stock(object): # 股票类
     def __init__(self, 
@@ -115,9 +115,8 @@ class Parameters(Stock, Trade, Company):
                         exchange=exchange,
                         date=date)
         self.year=year
-        with open('bin\\base\\token.tkn','r') as token:
+        with open(TOKEN_PATH,'r') as token:
             mytoken = token.readline().rstrip('\n')
-            # print('Your token is ' + mytoken)
         ts.set_token(mytoken)
         self.pro = ts.pro_api()
 
@@ -1867,7 +1866,7 @@ class General_API(Parameters):
         '''
 
 
-        with open('bin\\base\\token.tkn','r') as token:
+        with open(TOKEN_PATH,'r') as token:
             mytoken = token.readline().rstrip('\n')
             # print('Your token is ' + mytoken)
         ts.set_token(mytoken)

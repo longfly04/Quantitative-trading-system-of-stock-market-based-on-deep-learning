@@ -23,7 +23,7 @@ stk_cal = stk_data.getTradeCalender()
 # print(stk_list)
 
 df = pd.DataFrame(columns=('symbol','name'))
-with open('dataset\\上证50(000016).txt','r', encoding='UTF-8') as f:
+with open('dataset\\上证50成分股.txt','r', encoding='UTF-8') as f:
     for line in f.readlines():
         l = list(line.rstrip('\n').split())
         df = df.append({'symbol':l[0].strip(), 'name':l[1].strip()}, ignore_index=True)

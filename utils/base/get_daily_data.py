@@ -191,7 +191,7 @@ def main():
                 on='cal_date', how='left').merge(interest_total,
                 on='cal_date', how='left')
     print('Get {0} daily total data at {1} dimentions and {2} rows.'.format(TSCODE, total.shape[1], total.shape[0])) 
-    total.to_csv('dataset\\DailyTotal-'+TSCODE+'.csv')
+    total.to_csv('dataset\\dailyquotes-'+TSCODE+'.csv')
 
 
 if __name__ == "__main__":
