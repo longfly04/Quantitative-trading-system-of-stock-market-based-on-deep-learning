@@ -166,7 +166,8 @@ class StockData(Stock, Trade):
         is_hs	str	是否沪深港通标的，N否 H沪股通 S深股通
         '''
         data = self.api.stock_basic(list_status='L',
-                                    field='ts_code,symbol,name,area,industry,market,exchange,list_date,delist_date,is_hs')
+                                    field='ts_code,symbol,name,area,industry,market,exchange,list_date,delist_date,is_hs'
+                                    )
         '''# 获取股票代码 名称、行业、市场等信息'''
         save = pd.DataFrame(data)
         return save 
