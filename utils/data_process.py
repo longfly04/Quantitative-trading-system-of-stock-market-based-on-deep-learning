@@ -1,9 +1,10 @@
 import os
 import sys
-import tushare as ts
 import pandas as pd
 import numpy as np
-import datetime as dt
+import math
+import datetime
+import calendar
 import arrow
 import time
 import matplotlib.pyplot as plt
@@ -17,8 +18,9 @@ class DataProcessor():
     时序数据处理器，对日线数据和分钟数据进行预处理
     '''
     def __init__(self, config):
-        self.config = config
-
+        self.cfg = config
+        self.data_cfg = config['data']
+        self.pre_cfg = config["preprocess"]
 
     def _choose_color(self, num=1):
         '''
@@ -172,7 +174,6 @@ class DataProcessor():
         else:
             return [random.choice(list(cnames.keys())) for _ in range(num)]
 
-
     @info
     def get_data_statistics(self, data):
         '''
@@ -189,25 +190,99 @@ class DataProcessor():
         print(df)
 
     @info
-    def drop_and_fill(self, data):
+    def drop_dup_fill_nan(self, dataframe):
         '''
         去掉重复的列数据 将空值填上数据 符合时间序列的连续性 输入为股价数据集 输出为去重之后的股价数据集
         '''
-        data_new = data.T.drop_duplicates(keep='first').T 
+        data_new = dataframe.T.drop_duplicates(keep='first').T 
         # 去掉重复的数据列 使用转置再转置的方式 
-        data_new = data_new.fillna(axis=0, method='ffill')
+        data_new.fillna(axis=0, method='ffill', inplace=True)
         # 用之前的值填充空值 确保时间序列的连续性 剩下的空值用0填充
-
+        data_new.fillna(0, inplace=True)
+        # 剩下的空值用0填充
         return data_new
 
     @info
-    def cal_technical_indicators(self, data, last_days=2691, plot=False, save=False):
+    def fill_inf(self, dataframe):
+        '''
+        处理数据集的无穷值，用固定值填充，或者用0
+        '''
+        data_ = np.array(dataframe)
+        data_filled = np.apply_along_axis(self._fill_inf_with_zero, axis=0, arr=data_)
+        
+        return data_filled
+
+    def _fill_inf_with_zero(self, arr):
+        '''
+        fill inf 调用的内部函数
+        '''
+        a = [0 if math.isinf(x) else x for x in arr ]
+        return np.array(a)
+
+    def _fill_inf_with_peak(self, arr):
+        '''
+        fill inf 调用的内部函数
+        '''
+        a = arr
+        arrmax = 1e1
+        arrmin = 1e-1
+        posinf = np.isposinf(a)
+        neginf = np.isneginf(a)
+        a[posinf] = arrmax
+        a[neginf] = arrmin
+        
+        return a
+
+    @info
+    def convert_log(self, dataframe, trigger=10):
+        '''
+        对数值超过触发门限的列 取对数，对负数取绝对值再取对数，结果再取负
+        '''
+        # 根据门限找出需要取对数的数据列
+        data_ = dataframe.values
+        col_max = np.apply_along_axis(np.max, axis=0, arr=data_)
+        col_min = np.apply_along_axis(np.min, axis=0, arr=data_)
+        log_col_1 = dataframe.columns.values[np.where(col_max >= trigger)]
+        log_col_2 = dataframe.columns.values[np.where(col_min <= -trigger)]
+        log_col = np.concatenate([log_col_1, log_col_2], axis=0)
+        log_col = np.unique(log_col)
+        no_log_col = np.array([x for x in dataframe.columns.values if x not in log_col])
+        
+        # 计算两个区分的数据形状，便于合并
+        no_log_data = dataframe[no_log_col].values
+        no_log_shape = dataframe[no_log_col].values.shape
+        log_data = dataframe[log_col].values
+        log_shape = dataframe[log_col].values.shape
+
+        log_neg = np.where(log_data < 0)
+        log_pos = np.where(log_data > 0)
+        log_zero = np.where(log_data == 0)
+
+        log_ = np.zeros(shape=log_data.shape)
+        log_[log_pos] = np.log10(log_data[log_pos])
+        log_[log_neg] = -np.log10(np.abs(log_data[log_neg]))
+
+
+        if len(log_shape) > len(no_log_shape):
+            no_log_shape.append(1)
+        elif len(log_shape) < len(no_log_shape):
+            log_shape.append(1)
+
+        # 对已经计算和未计算的数据列进行拼接
+        res = np.concatenate([dataframe[no_log_col].values.reshape(no_log_shape), log_.reshape(log_shape)], axis=1)
+
+        return res
+
+    @info
+    def cal_technical_indicators(self, data, plot=False, save=False):
         '''
         计算股价技术指标 
         输入参数为数据集、持续时间和是否绘制图表 输出技术指标 key表示对哪一个指标进行统计分析
         7日均线和21日均线
         '''
         import stockstats
+
+        last_days = data.shape[0]
 
         dataset_tech = data[['daily_open', 'daily_close', 'daily_high', 'daily_low', 'daily_vol', 'daily_amount']]
         dataset_tech = dataset_tech.rename(columns= lambda x: x.lstrip('daily_')).rename(columns={'vol':'volume', 'ow':'low', 'mount':'amount'})
@@ -476,11 +551,117 @@ class DataProcessor():
         return fft_
 
     @info
-    def encode_datetime_embeddings(self, data):
+    def encode_date_embeddings(self, timeseries=None):
         '''
         对时间进行编码
+
+            周期：[10年, 季度of年，月of年，天of周，天of月]
         '''
-        
+        T = [10, 4, 12, 7, 0]
+        PI = math.pi
+
+        if isinstance(timeseries, np.ndarray):
+            date_list = []
+            ts = [(x-np.datetime64('1970-01-01T00:00:00Z')) / np.timedelta64(1, 's') for x in timeseries]
+            for x in ts:
+                try:
+                    tmp = arrow.get(x)
+                    date_list.append(tmp)
+                except Exception as e:
+                    print(e)
+        elif isinstance(timeseries, pd.Series):
+            date_list = pd.to_datetime(timeseries, format='%Y%m%d').to_list()
+            date_list = [arrow.get(t) for t in date_list]
+        else:
+            date_list = [arrow.get(timeseries)]
+
+        embedding_list = []
+        for dt in date_list:
+            T[4] = calendar.monthrange(dt.year, dt.month)[1]
+            d_of_w = calendar.weekday(dt.year, dt.month, dt.day)
+            q_of_y = math.ceil(dt.month/3)
+            datetime_vec = [dt.year, q_of_y, dt.month,
+                            d_of_w, dt.day]
+            x = np.array(datetime_vec) % np.array(T)
+            x_t = x/T
+            sin_ = [math.sin(PI*i) for i in x_t]
+            cos_ = [math.cos(PI*i) for i in x_t]
+            embedding = sin_ + cos_
+            embedding_list.append(embedding)
+
+        # 转换为字符串
+        date_list = [x.strftime('%Y%m%d')
+                           for x in date_list]
+        assert len(date_list) == len(embedding_list)
+
+        return np.array(date_list), np.array(embedding_list)
+
+    @info
+    def decode_date_embeddings(self, embeddings=None):
+        '''
+        对于已经编码的向量进行解码，解码成时间字符串
+
+        周期：[10年, 季度of年，月of年，天of周，天of月]
+        '''
+        T = [10, 4, 12, 7, 0]
+        start_year = 2009
+        PI = math.pi
+
+        assert len(embeddings) == 10
+        arcsin_ = [math.asin(x)/(PI) for x in embeddings[:5]]
+        arccos_ = [math.acos(x)/(PI) for x in embeddings[-5:]]
+        arc_T = np.array((arcsin_+arccos_)) * np.array((T+T))
+
+        pass
+
+    @info
+    def cal_daily_quotes(self, data):
+        '''
+        计算每日行情，处理价和量
+        '''
+        daily_quotes = self.data_cfg['daily_quotes']
+        target_col = self.data_cfg['target']
+        price_col = daily_quotes[1:6]
+        price_col.pop(3)
+        volumn_col = daily_quotes[-2:]
+        change_col = daily_quotes[6:8]
+        price_ = data[price_col]
+        volumn_ = data[volumn_col]
+        target_ = data[target_col]
+        change_ = data[change_col]
+
+        # 计算开收高低与收盘价的差价的百分比
+        diff_price_pct = (price_.values - target_.values.reshape((-1, 1))) * 100 / target_.values.reshape((-1, 1))
+        # 计算成交量和成交额的对数
+        log_vol = np.log10(volumn_.values)
+
+        daily_quote_feature = np.concatenate([target_.values.reshape((-1, 1)), diff_price_pct, log_vol], axis=1)
+
+        return daily_quote_feature
+
+
+    @info
+    def concat_features(self, datalist, pca_comp=0.99):
+        '''
+        将所有除了每日行情之外的特征进行拼接，并且完成去重、消除空值、无穷值、将数量级较大的数据缩放取对数
+        '''
+        from sklearn.decomposition import PCA
+
+        full_data = []
+        for data in datalist:
+            data_ = self.drop_dup_fill_nan(pd.DataFrame(data))
+            data_ = self.fill_inf(pd.DataFrame(data_))
+            data_ = self.convert_log(pd.DataFrame(data_))
+            full_data.append(data_)
+
+        full_data_ = np.concatenate(full_data, axis=1)
+
+        pca = PCA(n_components=pca_comp)
+
+        pca_data = pca.fit_transform(full_data_)
+
+        return pca_data
+
 
 class DataVisualiser():
     '''
