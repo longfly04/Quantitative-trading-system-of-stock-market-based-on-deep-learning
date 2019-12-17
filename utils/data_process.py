@@ -14,18 +14,19 @@ from .tools import *
 
 
 class DataProcessor():
-    '''
+    """
     时序数据处理器，对日线数据和分钟数据进行预处理
-    '''
+    """
     def __init__(self, config):
         self.cfg = config
         self.data_cfg = config['data']
         self.pre_cfg = config["preprocess"]
+        self.train_cfg = config['training']
 
     def _choose_color(self, num=1):
-        '''
+        """
         选个色号吧
-        '''
+        """
         import random
 
         cnames = {#'aliceblue':            '#F0F8FF',
@@ -176,9 +177,9 @@ class DataProcessor():
 
     @info
     def get_data_statistics(self, data):
-        '''
+        """
         获取数据的统计信息
-        '''
+        """
 
         print('1.数据集共有{}个样本，{}个特征。'.format(data.shape[0], data.shape[1]))
         print('2.数据集基本信息：')
@@ -191,9 +192,9 @@ class DataProcessor():
 
     @info
     def drop_dup_fill_nan(self, dataframe):
-        '''
+        """
         去掉重复的列数据 将空值填上数据 符合时间序列的连续性 输入为股价数据集 输出为去重之后的股价数据集
-        '''
+        """
         data_new = dataframe.T.drop_duplicates(keep='first').T 
         # 去掉重复的数据列 使用转置再转置的方式 
         data_new.fillna(axis=0, method='ffill', inplace=True)
@@ -204,25 +205,25 @@ class DataProcessor():
 
     @info
     def fill_inf(self, dataframe):
-        '''
+        """
         处理数据集的无穷值，用固定值填充，或者用0
-        '''
+        """
         data_ = np.array(dataframe)
         data_filled = np.apply_along_axis(self._fill_inf_with_zero, axis=0, arr=data_)
         
         return data_filled
 
     def _fill_inf_with_zero(self, arr):
-        '''
+        """
         fill inf 调用的内部函数
-        '''
+        """
         a = [0 if math.isinf(x) else x for x in arr ]
         return np.array(a)
 
     def _fill_inf_with_peak(self, arr):
-        '''
+        """
         fill inf 调用的内部函数
-        '''
+        """
         a = arr
         arrmax = 1e1
         arrmin = 1e-1
@@ -235,9 +236,9 @@ class DataProcessor():
 
     @info
     def convert_log(self, dataframe, trigger=10):
-        '''
+        """
         对数值超过触发门限的列 取对数，对负数取绝对值再取对数，结果再取负
-        '''
+        """
         # 根据门限找出需要取对数的数据列
         data_ = dataframe.values
         col_max = np.apply_along_axis(np.max, axis=0, arr=data_)
@@ -275,11 +276,11 @@ class DataProcessor():
 
     @info
     def cal_technical_indicators(self, data, plot=False, save=False):
-        '''
+        """
         计算股价技术指标 
         输入参数为数据集、持续时间和是否绘制图表 输出技术指标 key表示对哪一个指标进行统计分析
         7日均线和21日均线
-        '''
+        """
         import stockstats
 
         last_days = data.shape[0]
@@ -495,7 +496,7 @@ class DataProcessor():
 
     @info
     def cal_fft(self, data, plot=False, save=False):
-        '''
+        """
         计算傅里叶变换 
 
         输入
@@ -504,7 +505,7 @@ class DataProcessor():
         输出
             傅里叶变换
         
-        '''
+        """
         from scipy.fftpack import fft, ifft
 
         data_FT = data['daily_close'].astype(float)
@@ -552,11 +553,11 @@ class DataProcessor():
 
     @info
     def encode_date_embeddings(self, timeseries=None):
-        '''
+        """
         对时间进行编码
 
             周期：[10年, 季度of年，月of年，天of周，天of月]
-        '''
+        """
         T = [10, 4, 12, 7, 0]
         PI = math.pi
 
@@ -598,11 +599,11 @@ class DataProcessor():
 
     @info
     def decode_date_embeddings(self, embeddings=None):
-        '''
+        """
         对于已经编码的向量进行解码，解码成时间字符串
 
         周期：[10年, 季度of年，月of年，天of周，天of月]
-        '''
+        """
         T = [10, 4, 12, 7, 0]
         start_year = 2009
         PI = math.pi
@@ -616,9 +617,12 @@ class DataProcessor():
 
     @info
     def cal_daily_quotes(self, data):
-        '''
-        计算每日行情，处理价和量
-        '''
+        """
+        计算每日行情，处理价和量，保留开盘、最高、最低的差价和百分比，以及昨收和今收的差价和百分比，共8列
+        
+        输出：
+            (y, quote)
+        """
         daily_quotes = self.data_cfg['daily_quotes']
         target_col = self.data_cfg['target']
         price_col = daily_quotes[1:6]
@@ -639,12 +643,19 @@ class DataProcessor():
 
         return daily_quote_feature
 
+    @info
+    def cal_daily_price(self, current_date, output):
+        """
+        根据output的数据和日期，计算实际价格
+        """
+        pass
+
 
     @info
     def concat_features(self, datalist, pca_comp=0.99):
-        '''
+        """
         将所有除了每日行情之外的特征进行拼接，并且完成去重、消除空值、无穷值、将数量级较大的数据缩放取对数
-        '''
+        """
         from sklearn.decomposition import PCA
 
         full_data = []
@@ -662,11 +673,58 @@ class DataProcessor():
 
         return pca_data
 
+    @info
+    def split_train_test_date(self, date_list):
+        """
+        将日期序列按照配置文件的比例关系划分训练集、验证集、测试集和强化训练集
+        """
+        training_pct = self.pre_cfg["training_pct"]
+        reinforcement_pct = self.pre_cfg["reinforcement_pct"]
+        predict_pct = self.pre_cfg["predict_pct"]
+        validation_pct = self.pre_cfg["validation_pct"]
+
+
+
+        
+
+
+    def batch_data_generator(self, x, y, date_list, start_date, end_date):
+        """
+        批数据生成器，产生训练数据和验证集数据，以批为单位
+
+        输入：
+            X,Y 日期列表，开始时间和结束时间
+        """
+        batch_size = self.train_cfg['batch_size']
+        epochs = self.train_cfg['epochs']
+        steps_per_epoch = self.train_cfg['steps_per_epoch']
+        steps_per_val = self.train_cfg['steps_per_val']
+        validation_freq = self.train_cfg['validation_freq']
+        window_len = self.pre_cfg['window_len']
+        predict_len = self.pre_cfg['predict_len']
+
+        assert x.shape[0] == y.shape[0] == date_list.shape[0]
+
+
+
+
+
+
+    def _windowed_data(self, x, y, date_list, current_date):
+        """
+        产生单个窗口日期数据
+        输入：
+            X,Y 日期列表，当前窗口起始时间
+        """
+        pass
+
+
+
 
 class DataVisualiser():
-    '''
+    """
     数据可视化器
-    '''
+    """
     def __init__(self, config):
         self.config = config
 

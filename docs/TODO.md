@@ -50,3 +50,5 @@
    4. model类，包含预测模型，一个baseline为标准LSTM，一个实现类为Pattern transformer模型
    5. rl_model，使用DDPG，或者A3C算法，结合模型预测的向量训练agent。
    6. 已经定义好的tushare数据获取方法：stock、tushare util，tools
+
+7. 测试并使用PGportfolio的论文和框架实现强化学习算法

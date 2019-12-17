@@ -4,22 +4,22 @@ from __future__ import absolute_import
 
 from .backend import *
 from .backend import backend as K
+import os
+import datetime as dt
+from numpy import newaxis
+import datetime as dt 
 from keras import activations, constraints, initializers, regularizers
 from keras.layers import *
 from keras import Model
 from keras.models import Sequential, load_model
 from keras.callbacks import EarlyStopping, ModelCheckpoint, TensorBoard
 
-import os
-import datetime as dt
 from utils.tools import *
-from numpy import newaxis
-import datetime as dt 
 
 class LSTM_Model(Model):
     def __init__(self, config, **kwargs):
         super(LSTM_Model, self).__init__(**kwargs)
-        self.model_cfg = config['model']['baseline']
+        self.model_cfg = config['model']['lstm']
         self.training_cfg = config['training']
         self.date_cfg = config['data']
         self.after_cfg = config['after_training']
