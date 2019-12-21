@@ -1,7 +1,7 @@
 *.csv
 *.xlsx
 *.pyc
-*.json
+
 doc/DOC.md
 *_old_*
 *.npy

@@ -15,7 +15,6 @@ class StockHistory():
         self.stock_calender = self._get_trade_calender()
         self.stock_history = self._get_history_data()
 
-
     def _get_trade_calender(self,):
         '''
         获取股票交易日历

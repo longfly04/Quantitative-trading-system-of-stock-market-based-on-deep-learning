@@ -1,4 +1,6 @@
-# 一个基准方案：使用LSTM预测。
+"""
+使用基准的LSTM模型构建全流程预测模型
+"""
 
 from __future__ import absolute_import
 
@@ -6,6 +8,8 @@ from .backend import *
 from .backend import backend as K
 import os
 import datetime as dt
+import numpy as np 
+import pickle
 from numpy import newaxis
 import datetime as dt 
 from keras import activations, constraints, initializers, regularizers
@@ -17,30 +21,42 @@ from keras.callbacks import EarlyStopping, ModelCheckpoint, TensorBoard
 from utils.tools import *
 
 class LSTM_Model(Model):
-    def __init__(self, config, **kwargs):
+    def __init__(self, config, name=None, **kwargs):
         super(LSTM_Model, self).__init__(**kwargs)
         self.model_cfg = config['model']['lstm']
-        self.training_cfg = config['training']
-        self.date_cfg = config['data']
-        self.after_cfg = config['after_training']
+        self.train_cfg = config['training']
+        self.pre_cfg = config['preprocess']
+        self.data_cfg = config['data']
+        self.predict_cfg = config['prediction']
+        self.name = name
 
     @info
-    def build_model(self, ):
-
+    def build_model(self, input_shape, output_shape, epoch_steps):
+        self.inputs_shape = input_shape
+        self.outputs_shape = output_shape
         self.model = Sequential()
+        self.epoch_steps = epoch_steps
+        assert len(epoch_steps) == 2
+        # epoch_steps : (steps_per_epoch, validation_steps)
         
         for layer in self.model_cfg['layers']:
             neurons = layer['neurons'] if 'neurons' in layer else None
             dropout_rate = layer['rate'] if 'rate' in layer else None
             activation = layer['activation'] if 'activation' in layer else None
             return_seq = layer['return_seq'] if 'return_seq' in layer else None
-            input_timesteps = layer['input_timesteps'] if 'input_timesteps' in layer else None
-            input_dim = layer['input_dim'] if 'input_dim' in layer else None
+            inputs = self.inputs_shape if 'input_layer' in layer else (None, None)
+            outputs = self.outputs_shape[0] if 'output_layer' in layer else None
 
             if layer['type'] == 'dense':
-                self.model.add(Dense(neurons, activation=activation))
+                if outputs is not None:
+                    self.model.add(Dense(outputs, activation=activation))
+                else:
+                    self.model.add(Dense(neurons, activation=activation))
             if layer['type'] == 'lstm':
-                self.model.add(LSTM(neurons, input_shape=(input_timesteps, input_dim), return_sequences=return_seq))
+                if inputs is not None:
+                    self.model.add(LSTM(neurons, input_shape=inputs, return_sequences=return_seq))
+                else:
+                    self.model.add(LSTM(neurons, return_sequences=return_seq))
             if layer['type'] == 'dropout':
                 self.model.add(Dropout(dropout_rate))
             if layer['type'] == 'flatten':
@@ -70,29 +86,29 @@ class LSTM_Model(Model):
         '''
         print('[Model] Training Started')
 
-        save_fname = os.path.join(self.training_cfg['save_path'],
+        save_fname = os.path.join(self.train_cfg['save_path'],
                                  '%s-e%s.h5' % (dt.datetime.now().strftime('%Y%m%d-%H%M%S'), 
-                                 str(self.training_cfg['epochs'])))
+                                 str(self.train_cfg['epochs'])))
         callbacks = [
             EarlyStopping(monitor='val_loss', patience=3),
             ModelCheckpoint(filepath=save_fname, monitor='val_loss', save_best_only=True),
-            TensorBoard(log_dir=self.training_cfg['tensorboard_dir'])
+            TensorBoard(log_dir=self.train_cfg['tensorboard_dir'])
         ]
 
-        x = x[x.shape[0]%self.training_cfg['batch_size']:]
-        y = y[y.shape[0]%self.training_cfg['batch_size']:]
+        x = x[x.shape[0]%self.train_cfg['batch_size']:]
+        y = y[y.shape[0]%self.train_cfg['batch_size']:]
 
         self.history = self.model.fit(
                                       x,
                                       y,
-                                      epochs=self.training_cfg['epochs'],
-                                      batch_size=self.training_cfg['batch_size'],
+                                      epochs=self.train_cfg['epochs'],
+                                      batch_size=self.train_cfg['batch_size'],
                                       callbacks=callbacks,
                                       validation_data=val_data,
                                       )
-        if self.training_cfg['save']:
-            if not os.path.exists(self.training_cfg['save_dir']): 
-                os.makedirs(self.training_cfg['save_dir'])
+        if self.train_cfg['save']:
+            if not os.path.exists(self.train_cfg['save_dir']): 
+                os.makedirs(self.train_cfg['save_dir'])
             self.model.save(save_fname)
             print('[Saving] Model saved as %s' % save_fname)
         print('[Model] Training Completed.')
@@ -107,61 +123,80 @@ class LSTM_Model(Model):
         callbacks = [
             # EarlyStopping(monitor='val_loss', patience=2),
             # ModelCheckpoint(filepath=save_fname, monitor='val_loss', save_best_only=True),
-            TensorBoard(log_dir=self.training_cfg['tensorboard_dir'])
+            TensorBoard(log_dir=self.train_cfg['tensorboard_dir'])
         ]
-
 
         self.history = self.model.fit_generator(
                                                 xy_gen,
-                                                steps_per_epoch=self.training_cfg['steps_per_epoch'],
-                                                epochs=self.training_cfg['epoch_per_mask'],
+                                                steps_per_epoch=self.epoch_steps[0],
+                                                epochs=self.train_cfg['epochs'],
                                                 # callbacks=callbacks,
                                                 validation_data=val_gen,
-                                                validation_steps=self.training_cfg['steps_per_val'],
-                                                validation_freq=self.training_cfg['validation_freq']
+                                                validation_steps=self.epoch_steps[1],
+                                                validation_freq=self.train_cfg['validation_freq']
                                                 )
         if save_model:
-            if not os.path.exists(self.training_cfg['save_model_path']): 
-                os.makedirs(self.training_cfg['save_model_path'])
+            if not os.path.exists(self.train_cfg['save_model_path']): 
+                os.makedirs(self.train_cfg['save_model_path'])
             epoch_loss = self.history.history['loss'][-1]
             epoch_val_loss = self.history.history['val_loss'][-1]
             loss_str = 'loss_' + str(epoch_loss)[:6] + '-val_loss_' + str(epoch_val_loss)[:6]
-
-            save_fname = os.path.join(self.training_cfg['save_model_path'],
-                                 '%s-%s.h5' % (dt.datetime.now().strftime('%Y%m%d-%H%M%S'),
-                                               loss_str))
+            stock_name = self.name
+            save_fname = os.path.join(self.train_cfg['save_model_path'],
+                                 '%s-%s-%s.h5' % (dt.datetime.now().strftime('%Y%m%d-%H%M%S'),
+                                               loss_str, stock_name))
             self.model.save(save_fname)
             print('[Saving] Model saved as %s' % save_fname)
         print('[Model] Generator Training Completed.')
 
+
     @info
-    def predict_submit(self, predict_embedding, save_result=True):
-        import numpy as np 
-        import pickle
-
-        flow_max = self.date_cfg['flow_max']
-        pred_result = dict()
-        for k in predict_embedding.keys():
-            pred_x = predict_embedding[k]
-            k_result = []
-            for i in pred_x:
-                ret = self.model.predict(i[newaxis, :, :,], batch_size=32, verbose=1,)
-                ret = flow_max * ret
-                k_result.append(ret)
-
-            k_result = np.array(k_result).reshape((-1, pred_x.shape[1], 1))
-            pred_result[k] = k_result
+    def predict_future(self, pred_x, save_result=True):
+        """
+        使用普通方式预测序列
+        """
+        batch_size = self.train_cfg['batch_size']
+        predict_type = self.pre_cfg['predict_type']
+        res_list = []
+        for x in pred_x:
+            ret = self.model.predict(x[newaxis, :, :,], batch_size=batch_size, verbose=1,)
+            res_list.append(ret)
 
         if save_result:
-            if not os.path.exists(self.after_cfg['save_result_path']): 
-                os.makedirs(self.after_cfg['save_result_path'])
+            if not os.path.exists(self.predict_cfg['save_result_path']): 
+                os.makedirs(self.predict_cfg['save_result_path'])
             now = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
-            save_file = 'results_'+ now +'.pkl'
-            save_fname = os.path.join(self.after_cfg['save_result_path'],
+            save_file = 'results_'+ now + self.name +'.pkl'
+            save_fname = os.path.join(self.predict_cfg['save_result_path'],
                                       save_file)
             with open(save_fname, 'wb') as out:
-                pickle.dump(pred_result, out)
-            print("[Saving] Results is saved as \' %s \' ." %save_fname)
+                pickle.dump(res_list, out)
+            print("[Saving] Results is saved as \'%s\' ." %save_fname)
 
-        return pred_result
+        return res_list
 
+
+    @info
+    def predict_future_generated(self, predict_gen, steps=1, save_result=True):
+        """
+        使用生成器预测未来数据
+        """
+        batch_size = self.train_cfg['batch_size']
+        predict_type = self.pre_cfg['predict_type']
+
+        ret_list = self.model.predict_generator(predict_gen, steps=steps, verbose=1,)
+        print("[Predict] Predict result is as follows...")
+        print(ret_list)
+
+        if save_result:
+            if not os.path.exists(self.predict_cfg['save_result_path']): 
+                os.makedirs(self.predict_cfg['save_result_path'])
+            now = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
+            save_file = 'results_'+ now + self.name +'.pkl'
+            save_fname = os.path.join(self.predict_cfg['save_result_path'],
+                                      save_file)
+            with open(save_fname, 'wb') as out:
+                pickle.dump(ret_list, out)
+            print("[Saving] Results is saved as \'%s\' ." %save_fname)
+
+        return ret_list

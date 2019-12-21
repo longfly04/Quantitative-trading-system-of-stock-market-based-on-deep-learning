@@ -1,0 +1,100 @@
+{
+    "repo_path":"D:\\GitHub\\Quantitative-analysis-with-Deep-Learning",
+	"data":{
+		"date_range":["20090101", "20191231"],
+        "data_dir":"dataset",
+		"SH50_list_path":"dataset\\上证50成分股.txt",
+		"token_path":"utils\\base\\token.tkn",
+		"stock_code":["600519"],
+		"target":"daily_close",
+		"daily_quotes":["daily_trade_date","daily_open","daily_high","daily_low","daily_close",
+					"daily_pre_close","daily_change","daily_pct_chg","daily_vol","daily_amount"],
+		"features":["daily_", "daily_indicator_", "moneyflow_", "res_qfq_", "res_hfq_", "income_",
+					"balancesheet_", "cashflow_", "forecast_", "express_", "dividend_", "financeindicator_",
+					"HSGTflow_", "margin_", "pledge_", "repurchase_", "desterilization_", "block_",
+					"shibor_", "shiborquote_", "shiborLPR_", "libor_", "hibor_", "wen_"],
+		"date_col":"cal_date"
+	},
+	"preprocess":{
+		"pca_comp":0.9999,
+		"window_len":55,
+		"predict_len":5,
+		"training_pct":0.95,
+		"reinforcement_pct":0.25,
+		"predict_pct":0.05,
+		"validation_pct":0.1,
+		"predict_type":"pct",
+		"pct_scale":100,
+		"norm_type":"global",
+		"norm_algo":"pca"
+	},
+	"training":{
+		"train":true,
+		"epochs":1,
+		"batch_size":32,
+		"save_model_path":"saved_models",
+		"load":true,
+		"load_path":["saved_models\\20191221-131308-loss_1.7204-val_loss_4.4086-600519.h5"],
+		"continue":false,
+		"tensorboard_dir":"tb_log/",
+		"validation_freq":1
+	},
+	"model":{
+        "model_path":"model",
+		"lstm":{
+			"loss": "mse",
+			"optimizer": "adam",
+			"plot_model":false,
+			"plot_model_path":"_lstm_model.png",
+			"layers": [
+				{
+					"type": "lstm",
+					"neurons": 256,
+					"input_layer":true,
+					"return_seq": true
+				},
+				{
+					"type": "dropout",
+					"rate": 0.5
+				},
+				{
+					"type": "lstm",
+					"neurons": 128,
+					"return_seq": true
+				},
+				{
+					"type": "lstm",
+					"neurons": 128,
+					"return_seq": true
+				},
+				{
+					"type": "dropout",
+					"rate": 0.5
+				},
+				{
+					"type": "flatten"
+				},
+				{
+					"type": "dense",
+					"output_layer": true,
+					"activation": "linear"
+				}
+			]
+		}
+	},
+	"prediction":{
+		"predict":true,
+		"predict_steps":5,
+		"well_trained":false,
+		"save_result_path":"saved_results",
+		"well_trained_dir":"well_trained",
+		"well_trained_model":[""],
+		"output_path":"output",
+		"output_file":"predict_file"
+	},
+	"visualization":{
+		"draw_graph":false,
+		"describe_graph":true
+	}
+
+}

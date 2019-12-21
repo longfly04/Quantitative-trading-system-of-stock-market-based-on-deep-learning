@@ -3,12 +3,17 @@ import sys
 import pandas as pd
 import numpy as np
 import math
+import random
+import copy
 import datetime
 import calendar
 import arrow
 import time
+from sklearn.preprocessing import StandardScaler
+from numpy import newaxis
 import matplotlib.pyplot as plt
-
+import matplotlib
+from pandas.plotting import register_matplotlib_converters
 from .base.stock import *
 from .tools import *
 
@@ -22,6 +27,7 @@ class DataProcessor():
         self.data_cfg = config['data']
         self.pre_cfg = config["preprocess"]
         self.train_cfg = config['training']
+        self.predict_cfg = config['prediction']
 
     def _choose_color(self, num=1):
         """
@@ -191,12 +197,31 @@ class DataProcessor():
         print(df)
 
     @info
+    def datetime_validation(self, data, history_calendar):
+        """
+        数据集验证，主要是检查并剔除不符合交易日calendar的数据以及重复数据
+        """
+        date_col = self.data_cfg['date_col']
+        history = pd.DataFrame(history_calendar, columns=[date_col], dtype='int64')
+        assert pd.unique(history[date_col]).shape[0] == history.shape[0]
+
+        if data[date_col].is_unique:
+            # 检查索引是否唯一
+            pass
+        else:
+            data_ = data.drop_duplicates(subset=[date_col], keep='first')
+            data_ = pd.merge(data_, history, how='outer', left_on=data_[date_col], right_on=history[date_col])
+            print("[INFO] Data drop duplications at %d rows." %(data.shape[0] - data_.shape[0]))
+        return data_
+
+    @info
     def drop_dup_fill_nan(self, dataframe):
         """
-        去掉重复的列数据 将空值填上数据 符合时间序列的连续性 输入为股价数据集 输出为去重之后的股价数据集
+        去掉重复的数据 将空值填上数据 符合时间序列的连续性 输入为股价数据集 输出为去重之后的股价数据集
         """
-        data_new = dataframe.T.drop_duplicates(keep='first').T 
         # 去掉重复的数据列 使用转置再转置的方式 
+        data_new = dataframe.T.drop_duplicates(keep='first').T 
+        
         data_new.fillna(axis=0, method='ffill', inplace=True)
         # 用之前的值填充空值 确保时间序列的连续性 剩下的空值用0填充
         data_new.fillna(0, inplace=True)
@@ -211,7 +236,7 @@ class DataProcessor():
         data_ = np.array(dataframe)
         data_filled = np.apply_along_axis(self._fill_inf_with_zero, axis=0, arr=data_)
         
-        return data_filled
+        return pd.DataFrame(data_filled)
 
     def _fill_inf_with_zero(self, arr):
         """
@@ -272,14 +297,19 @@ class DataProcessor():
         # 对已经计算和未计算的数据列进行拼接
         res = np.concatenate([dataframe[no_log_col].values.reshape(no_log_shape), log_.reshape(log_shape)], axis=1)
 
-        return res
+        return pd.DataFrame(res)
 
     @info
     def cal_technical_indicators(self, data, plot=False, save=False):
         """
         计算股价技术指标 
-        输入参数为数据集、持续时间和是否绘制图表 输出技术指标 key表示对哪一个指标进行统计分析
-        7日均线和21日均线
+
+        输入：
+            参数为数据集、持续时间和是否绘制图表 输出技术指标 key表示对哪一个指标进行统计分析
+            7日均线和21日均线
+
+        输出：
+            Dataframe
         """
         import stockstats
 
@@ -498,13 +528,9 @@ class DataProcessor():
     def cal_fft(self, data, plot=False, save=False):
         """
         计算傅里叶变换 
-
-        输入
-            股价数据集 
             
         输出
-            傅里叶变换
-        
+            Dataframe
         """
         from scipy.fftpack import fft, ifft
 
@@ -556,7 +582,11 @@ class DataProcessor():
         """
         对时间进行编码
 
-            周期：[10年, 季度of年，月of年，天of周，天of月]
+        周期：
+            [10年, 季度of年，月of年，天of周，天of月]
+        
+        输出：
+            array, array 日期列表，编码列表
         """
         T = [10, 4, 12, 7, 0]
         PI = math.pi
@@ -600,6 +630,8 @@ class DataProcessor():
     @info
     def decode_date_embeddings(self, embeddings=None):
         """
+        TODO
+
         对于已经编码的向量进行解码，解码成时间字符串
 
         周期：[10年, 季度of年，月of年，天of周，天of月]
@@ -618,13 +650,15 @@ class DataProcessor():
     @info
     def cal_daily_quotes(self, data):
         """
-        计算每日行情，处理价和量，保留开盘、最高、最低的差价和百分比，以及昨收和今收的差价和百分比，共8列
+        计算每日行情，处理价和量，保留开盘、最高、最低的差价和百分比，以及昨收和今收的差价和百分比
         
         输出：
-            (y, quote)
+            拼接为(real_price, diff_price, pct_price, other quotes...)的Dataframe
         """
         daily_quotes = self.data_cfg['daily_quotes']
         target_col = self.data_cfg['target']
+        # 在选择pct模式下的缩放尺度
+        pct_scale = self.pre_cfg['pct_scale']
         price_col = daily_quotes[1:6]
         price_col.pop(3)
         volumn_col = daily_quotes[-2:]
@@ -632,34 +666,100 @@ class DataProcessor():
         price_ = data[price_col]
         volumn_ = data[volumn_col]
         target_ = data[target_col]
-        change_ = data[change_col]
+        # change_ = data[change_col] # 这个数据是不准确的
 
-        # 计算开收高低与收盘价的差价的百分比
-        diff_price_pct = (price_.values - target_.values.reshape((-1, 1))) * 100 / target_.values.reshape((-1, 1))
+        # 计算当日的开、高、低、昨收与今日收盘价的差价和百分比
+        daily_price_diff = price_.values - target_.values.reshape((-1, 1))
+        daily_price_pct = (price_.values - target_.values.reshape((-1, 1))) * pct_scale / target_.values.reshape((-1, 1))
+        daily_price_diff = pd.DataFrame(daily_price_diff)
+        daily_price_pct = pd.DataFrame(daily_price_pct)
+        # 计算昨今开、高、低变化值和变化率
+        daily_diff = (price_ - price_.shift(1)).fillna(0)
+        daily_pct = (daily_diff * pct_scale / price_.shift(1)).fillna(0)
+        # 计算昨今收盘价变化值和变化率
+        close_diff = (target_ - target_.shift(1)).fillna(0)
+        close_pct = (close_diff * pct_scale / target_.shift(1)).fillna(0)
+        # 计算昨今成交量变化值和变化率
+        volumn_diff = (volumn_ - volumn_.shift(1)).fillna(0)
+        volumn_pct = (volumn_diff / volumn_.shift(1)).fillna(0)
+
         # 计算成交量和成交额的对数
-        log_vol = np.log10(volumn_.values)
+        log_vol_diff = self.convert_log(volumn_diff)
 
-        daily_quote_feature = np.concatenate([target_.values.reshape((-1, 1)), diff_price_pct, log_vol], axis=1)
+        # 组合成行情特征[real, diff, pct ,others]
+        daily_quote_feature = pd.concat(
+            [target_, close_diff, close_pct, 
+            price_, daily_diff, daily_pct,
+            log_vol_diff, volumn_pct,
+            daily_price_diff, daily_price_pct
+            ],
+            axis=1
+        )
 
         return daily_quote_feature
 
     @info
-    def cal_daily_price(self, current_date, output):
+    def cal_daily_price(self, date_price_index, current_date, output):
         """
-        根据output的数据和日期，计算实际价格
-        """
-        pass
 
+        根据output的数据和日期，计算实际价格
+
+        计算方式： 
+            X:  current_date    predict_date
+            Y:  current_price   output
+
+        输出：
+            real price
+        """
+        # 在选择pct模式下的缩放尺度
+        pct_scale = self.pre_cfg['pct_scale']
+        output = np.array(output).reshape((-1,))
+
+        if isinstance(current_date, str):
+            current_price = date_price_index['price'][date_price_index['date'] == current_date]
+        else:
+            current_price = date_price_index['price'].loc[current_date]
+        assert self.pre_cfg['predict_len'] * self.predict_cfg['predict_steps'] == len(output)
+
+        current_price = float(current_price)
+        if self.pre_cfg['predict_type'] == 'real':
+            # 真值
+            ret = output
+        elif self.pre_cfg['predict_type'] == 'diff':
+            # 差值
+            true_value = current_price
+            sum_list = []
+            sum_i = true_value
+            for i in range(0, len(output)):
+                sum_i = sum_i + output[i]
+                sum_list.append(sum_i)
+            ret = sum_list
+        elif self.pre_cfg['predict_type'] == 'pct':
+            #比值
+            true_value = current_price
+            multi_list = []
+            multi_i = true_value
+            for i in range(0, len(output)):
+                multi_i = multi_i * (1 + output[i] / pct_scale)
+                multi_list.append(multi_i)
+            ret = multi_list
+        else:
+            raise ValueError("Please check the config file in \'predict_type\' %s" %self.pre_cfg['predict_type'])
+
+        return ret
 
     @info
-    def concat_features(self, datalist, pca_comp=0.99):
+    def concat_features(self, data_list, pca_comp=0.99):
         """
         将所有除了每日行情之外的特征进行拼接，并且完成去重、消除空值、无穷值、将数量级较大的数据缩放取对数
+        
+        输出：
+            经过PCA降维后的array
         """
         from sklearn.decomposition import PCA
 
         full_data = []
-        for data in datalist:
+        for data in data_list:
             data_ = self.drop_dup_fill_nan(pd.DataFrame(data))
             data_ = self.fill_inf(pd.DataFrame(data_))
             data_ = self.convert_log(pd.DataFrame(data_))
@@ -674,59 +774,136 @@ class DataProcessor():
         return pca_data
 
     @info
-    def split_train_test_date(self, date_list):
+    def split_train_test_date(self, date_price_index):
         """
         将日期序列按照配置文件的比例关系划分训练集、验证集、测试集和强化训练集
+
+        训练顺序：
+            env model：     训练集  验证集  测试集
+            reinforce model：   强化训练集  测试集
+
+        输出：
+            dict keys：training, validation, reinforcement
         """
         training_pct = self.pre_cfg["training_pct"]
         reinforcement_pct = self.pre_cfg["reinforcement_pct"]
         predict_pct = self.pre_cfg["predict_pct"]
         validation_pct = self.pre_cfg["validation_pct"]
-
-
-
-        
-
-
-    def batch_data_generator(self, x, y, date_list, start_date, end_date):
-        """
-        批数据生成器，产生训练数据和验证集数据，以批为单位
-
-        输入：
-            X,Y 日期列表，开始时间和结束时间
-        """
-        batch_size = self.train_cfg['batch_size']
-        epochs = self.train_cfg['epochs']
-        steps_per_epoch = self.train_cfg['steps_per_epoch']
-        steps_per_val = self.train_cfg['steps_per_val']
-        validation_freq = self.train_cfg['validation_freq']
         window_len = self.pre_cfg['window_len']
         predict_len = self.pre_cfg['predict_len']
 
-        assert x.shape[0] == y.shape[0] == date_list.shape[0]
+        data_length = date_price_index.shape[0] - window_len - predict_len
+        training_length = int(data_length * training_pct)
+        reinforcement_length = int(data_length * reinforcement_pct)
+        validation_length = int(training_length * validation_pct)
+        predict_length = data_length - training_length
+
+        training_date_range = date_price_index.iloc[:training_length]
+        reinforcement_date_range = training_date_range[-reinforcement_length:]
+        validation_date = training_date_range.sample(n=validation_length)
+        predict_date = date_price_index.iloc[training_length:- window_len - predict_len]
+
+        date_range_dict = dict([('train', training_date_range.index.values),
+                             ('validation', validation_date.index.values),
+                             ('reinforcement', reinforcement_date_range.index.values),
+                             ('predict', predict_date.index.values)])
+
+        return date_range_dict
 
 
+    def batch_data_generator(self, X, Y, date_price_index, date_range_dict, gen_type='train'):
+        """
+        批数据生成器，产生训练数据和验证集数据，以批为单位
 
+        输出：
+            generator X:[]
+        """
+        batch_size = self.train_cfg['batch_size']
+        predict_len = self.pre_cfg['predict_len']
 
+        assert X.shape[0] == Y.shape[0] == date_price_index.shape[0]
 
+        while 1:
+            data_dates = date_range_dict[gen_type]
+            x_train = []
+            y_train = []
+            if gen_type == 'predict':
+                for idx in range(0, len(data_dates), predict_len):
+                    # 每隔一个预测间隔，产生一个预测序列x
+                    x = self._windowed_data(X, Y=None, date_price_index=date_price_index, start_date=data_dates[idx])
+                    x_ = x.reshape((newaxis, x.shape[0], x.shape[1]))
+                    yield x_
+            else:
+                for idx in data_dates:
+                    x, y = self._windowed_data(X, Y, date_price_index=date_price_index, start_date=idx)
+                    x_train.append(x)
+                    y_train.append(y)
+                for i in range(0, len(x_train) - batch_size):
+                    x_ = np.array(x_train[i : i + batch_size]).reshape((batch_size, x.shape[0], x.shape[1]))
+                    y_ = np.array(y_train[i : i + batch_size]).reshape((batch_size, y.shape[0]))
+                    yield (x_, y_)
 
-    def _windowed_data(self, x, y, date_list, current_date):
+    def predict_data_x(self, X, date_price_index, predict_date_range):
+        """
+        待预测数据
+        """
+        window_len = self.pre_cfg['window_len']
+        predict_len = self.pre_cfg['predict_len']
+        predict_steps = self.predict_cfg['predict_steps']
+        
+        predict_data = []
+        for idx in range(0, len(predict_date_range), predict_len):
+            x_end_idx = date_price_index['num'].loc[predict_date_range[idx]]
+            assert x_end_idx >= window_len
+            x_end_idx = x_end_idx - 1
+            x_start_idx = x_end_idx - window_len
+            x_predict = X[x_start_idx : x_end_idx]
+            predict_data.append(x_predict)
+
+        return np.array(predict_data)
+
+    def _windowed_data(self, X, Y=None, date_price_index=None, start_date=None):
         """
         产生单个窗口日期数据
+
         输入：
             X,Y 日期列表，当前窗口起始时间
         """
-        pass
+        window_len = self.pre_cfg['window_len']
+        predict_len = self.pre_cfg['predict_len']
+        
+        assert X.shape[0] == date_price_index.shape[0]
 
+        start_idx = date_price_index['num'].loc[start_date]
+        x_end_idx = start_idx + window_len
+        y_start_idx = start_idx + window_len + 1
+        y_end_idx = start_idx + window_len + predict_len + 1
 
+        try:
+            x = X[start_idx : x_end_idx]
+        except Exception as e:
+            print(e)
+        if self.pre_cfg['norm_type'] == 'window':
+            # 在每个数据窗口内进行标准化
+            ss = StandardScaler()
+            x = ss.fit_transform(x)
+        if Y is not None:
+            assert Y.shape[0] == date_price_index.shape[0]
+            y = Y[y_start_idx : y_end_idx]
+            return x, y
 
+        else:
+            return x
 
 class DataVisualiser():
     """
     数据可视化器
     """
-    def __init__(self, config):
+    def __init__(self, config, name=None):
         self.config = config
+        self.pre_cfg = config['preprocess']
+        self.predict_cfg = config['prediction']
+        self.stock_name = name
 
     @info
     def get_ARIMA(self, data, plot=True, save=False):# 获取时间序列特征，使用ARIMA 输入为股价数据集
@@ -841,3 +1018,27 @@ class DataVisualiser():
             plt.show()
 
         return feature_importance
+
+
+    @info
+    def plot_prediction(self, date_price_index, prediction, date_range_dict):
+        """
+        将预测数据和真实数据作图
+        """
+        register_matplotlib_converters()
+        stock_name = self.stock_name
+        predict_date_len = self.pre_cfg['predict_len'] * self.predict_cfg['predict_steps']
+        plot_date_range = date_range_dict['predict'][:predict_date_len]
+        dates = matplotlib.dates.date2num(plot_date_range)
+        real_price = date_price_index['price'].loc[plot_date_range].values.astype(float)
+        predict_price = np.array(prediction)
+
+        fig = plt.figure(figsize=(12,8),dpi=100)
+        plt.title("True and Predicted Prices of %s" %stock_name)
+        plt.plot(plot_date_range, real_price, 'c.-',label='True Price')
+        plt.plot(plot_date_range, predict_price, 'm.--',label='Prediction')
+        plt.xlabel('date')
+        plt.ylabel('price')
+
+        plt.legend()
+        plt.show()

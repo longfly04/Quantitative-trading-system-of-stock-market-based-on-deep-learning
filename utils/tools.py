@@ -10,15 +10,17 @@ class Timer():
     定义一个计时器类 stop方法输出用时
     '''
 
-    def __init__(self):
+    def __init__(self, name=None):
         self.start_dt = None
+        self.name = name
 
     def start(self):
         self.start_dt = dt.datetime.now()
 
     def stop(self):
         end_dt = dt.datetime.now()
-        print('[Timer] Time taken: %s' % (end_dt - self.start_dt))
+        
+        print('[Timer \"%s\"] Time taken: %s' % (self.name, end_dt - self.start_dt))
 
 class Logger():
     '''
@@ -63,7 +65,7 @@ def info(func):
         logger = Logger()
         try:
             print("[INFO] Method: \" {name} \" is starting...".format(name = func.__name__))
-            timer = Timer()
+            timer = Timer(func.__name__)
             timer.start()
             result = func(*args,**kwargs)
             timer.stop()
