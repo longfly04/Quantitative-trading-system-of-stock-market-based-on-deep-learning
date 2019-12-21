@@ -5,7 +5,7 @@
         "data_dir":"dataset",
 		"SH50_list_path":"dataset\\上证50成分股.txt",
 		"token_path":"utils\\base\\token.tkn",
-		"stock_code":["600519"],
+		"stock_code":["601601", "601088", "600703", "600196", "600276"],
 		"target":"daily_close",
 		"daily_quotes":["daily_trade_date","daily_open","daily_high","daily_low","daily_close",
 					"daily_pre_close","daily_change","daily_pct_chg","daily_vol","daily_amount"],
@@ -19,9 +19,9 @@
 		"pca_comp":0.9999,
 		"window_len":55,
 		"predict_len":5,
-		"training_pct":0.95,
+		"training_pct":0.98,
 		"reinforcement_pct":0.25,
-		"predict_pct":0.05,
+		"predict_pct":0.02,
 		"validation_pct":0.1,
 		"predict_type":"pct",
 		"pct_scale":100,
@@ -33,7 +33,7 @@
 		"epochs":1,
 		"batch_size":32,
 		"save_model_path":"saved_models",
-		"load":true,
+		"load":false,
 		"load_path":["saved_models\\20191221-131308-loss_1.7204-val_loss_4.4086-600519.h5"],
 		"continue":false,
 		"tensorboard_dir":"tb_log/",
@@ -94,7 +94,8 @@
 	},
 	"visualization":{
 		"draw_graph":false,
-		"describe_graph":true
+		"describe_graph":true,
+		"save":true
 	}
 
 }

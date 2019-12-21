@@ -153,7 +153,8 @@ class LSTM_Model(Model):
     @info
     def predict_future(self, pred_x, save_result=True):
         """
-        使用普通方式预测序列
+        使用普通方式预测序列，这种预测方式可能是因为PCA的原因引入了未来信息造成的信息泄露，
+        精度比想象中高，趋势把握的很准，很奇怪。
         """
         batch_size = self.train_cfg['batch_size']
         predict_type = self.pre_cfg['predict_type']
@@ -200,3 +201,26 @@ class LSTM_Model(Model):
             print("[Saving] Results is saved as \'%s\' ." %save_fname)
 
         return ret_list
+
+    @info
+    def predict_unknown(self, pred_x, save_result=True):
+        """
+        真正意义上的预测未来的未知数据，使用现有数据集的最后一个窗口预测未来数据
+        """
+        batch_size = self.train_cfg['batch_size']
+        predict_type = self.pre_cfg['predict_type']
+        
+        ret = self.model.predict(pred_x[newaxis, :, :,], batch_size=batch_size, verbose=1,)
+
+        if save_result:
+            if not os.path.exists(self.predict_cfg['save_result_path']): 
+                os.makedirs(self.predict_cfg['save_result_path'])
+            now = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
+            save_file = 'results_'+ now + self.name +'.pkl'
+            save_fname = os.path.join(self.predict_cfg['save_result_path'],
+                                      save_file)
+            with open(save_fname, 'wb') as out:
+                pickle.dump(ret, out)
+            print("[Saving] Results is saved as \'%s\' ." %save_fname)
+
+        return ret
