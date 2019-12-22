@@ -115,9 +115,10 @@ def main():
             # 预测数据集之外的时间的股价，也就是真正意义上的“未来股价预测”，仅供参考。
             window_len = config['preprocess']['window_len']
             last_window = x[-window_len:]
+            last_day = date_price_index.index[-1]
             unknown_future = model.predict_unknown(last_window)
-            real_unknown_future = data_pro.cal_daily_price(date_price_index, date_price_index.index[-1], unknown_future)
-            print("The future 5 days close price of %s is ..." %stock_name)
+            real_unknown_future = data_pro.cal_daily_price(date_price_index, last_day, unknown_future, unknown=True)
+            print("[UNKNOWN] The future 5 days close price of %s is ..." %stock_name)
             print(real_unknown_future)
         except Exception as e:
             print(e)

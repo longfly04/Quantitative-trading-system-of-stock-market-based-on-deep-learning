@@ -753,7 +753,7 @@ class DataProcessor():
         return daily_quote_feature
 
     @info
-    def cal_daily_price(self, date_price_index, current_date, output):
+    def cal_daily_price(self, date_price_index, current_date, output, unknown=False):
         """
 
         根据output的数据和日期，计算实际价格
@@ -774,7 +774,11 @@ class DataProcessor():
                                                       == current_date]
         else:
             current_price = date_price_index['price'].loc[current_date]
-        assert self.pre_cfg['predict_len'] * \
+        # 预测未知
+        if unknown:
+            assert self.pre_cfg['predict_len'] == len(output)
+        else:
+            assert self.pre_cfg['predict_len'] * \
             self.predict_cfg['predict_steps'] == len(output)
 
         current_price = float(current_price)
