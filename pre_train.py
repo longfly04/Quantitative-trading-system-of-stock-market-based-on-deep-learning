@@ -118,7 +118,8 @@ def main():
             last_day = date_price_index.index[-1]
             unknown_future = model.predict_unknown(last_window)
             real_unknown_future = data_pro.cal_daily_price(date_price_index, last_day, unknown_future, unknown=True)
-            print("[UNKNOWN] The future 5 days close price of %s is ..." %stock_name)
+            last_day = dt.datetime.strftime(last_day, format='%Y%m%d')
+            print("[UNKNOWN] The future 5 days' close price from %s of stock %s is as follows." %(last_day, stock_name))
             print(real_unknown_future)
         except Exception as e:
             print(e)
