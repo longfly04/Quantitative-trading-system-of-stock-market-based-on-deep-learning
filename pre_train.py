@@ -24,7 +24,7 @@ def main():
         # 去重和填充空值
         data_ = data_pro.drop_dup_fill_nan(data_)
         # 计算技术指标
-        data_tec = data_pro.cal_technical_indicators(data_)
+        data_tec = data_pro.cal_technical_indicators(data_, date_index=date_list, plot=True, save=True)
         # 计算傅里叶变换
         data_fft = data_pro.cal_fft(data_)
         # 计算日行情

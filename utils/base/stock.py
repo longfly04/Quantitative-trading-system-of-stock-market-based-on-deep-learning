@@ -194,7 +194,7 @@ class StockData(Stock, Trade):
         is_open	str	Y	是否交易 0休市 1交易
         pretrade_date	str	N	上一个交易日
         '''
-        data = self.api.trade_cal(exchange='',
+        data = self.api.trade_cal(exchange='SSE',
         start_date=self.start_date,
         end_date=self.end_date,
         is_open='1')

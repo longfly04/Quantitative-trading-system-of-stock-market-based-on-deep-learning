@@ -1,19 +1,22 @@
-import os
-import sys
-import pandas as pd
-import numpy as np
-import math
-import random
+import calendar
 import copy
 import datetime
-import calendar
-import arrow
+import math
+import os
+import random
+import sys
 import time
-from sklearn.preprocessing import StandardScaler
-from numpy import newaxis
-import matplotlib.pyplot as plt
+
+import arrow
 import matplotlib
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import stockstats
+from numpy import newaxis
 from pandas.plotting import register_matplotlib_converters
+from sklearn.preprocessing import StandardScaler
+
 from .base.stock import *
 from .tools import *
 
@@ -306,20 +309,22 @@ class DataProcessor():
         return pd.DataFrame(res)
 
     @info
-    def cal_technical_indicators(self, data, plot=False, save=False):
+    def cal_technical_indicators(self, data, date_index=None, plot=False, save=False, plot_days=500):
         """
         计算股价技术指标 
 
         输入：
             参数为数据集、持续时间和是否绘制图表 输出技术指标 key表示对哪一个指标进行统计分析
             7日均线和21日均线
+            plot_days：绘制最近多少天的图像
 
         输出：
             Dataframe
         """
-        import stockstats
+        from pandas.plotting import register_matplotlib_converters
+        register_matplotlib_converters()
 
-        last_days = data.shape[0]
+        last_days = plot_days
 
         dataset_tech = data[['daily_open', 'daily_close',
                              'daily_high', 'daily_low', 'daily_vol', 'daily_amount']]
@@ -387,13 +392,13 @@ class DataProcessor():
         dataset_tech['ma7'] = dataset_tech['close'].rolling(window=7).mean()
         dataset_tech['ma21'] = dataset_tech['close'].rolling(window=21).mean()
         dataset_tech['ema'] = dataset_tech['close'].ewm(com=0.5).mean()
-        dataset_tech['momentum'] = dataset_tech['close']-1
+        dataset_tech['momentum'] = dataset_tech['close'] - dataset_tech['close'].shift(1)
 
         if plot:  # 绘制技术指标
             plot_dataset = dataset_tech
             plot_dataset = dataset_tech.iloc[-last_days:, :]
             shape_0 = plot_dataset.shape[0]
-            x = list(plot_dataset.index)
+            x = [dt.datetime.strptime(i,'%Y%m%d') for i in date_index][-last_days:]
             colors = self._choose_color(10)
 
             # 0.股价、成交量，成交额、MA移动平均线
@@ -401,12 +406,12 @@ class DataProcessor():
             linewidth = 1
             plt.subplot(3, 1, 1)
             plt.title('Close Price and Volume Statistics')
-            plt.plot(plot_dataset['close'], label='Close Price')
-            plt.plot(plot_dataset['ma7'], label='MA-7',
+            plt.plot(x,plot_dataset['close'], label='Close Price')
+            plt.plot(x,plot_dataset['ma7'], label='MA-7',
                      linestyle='--', linewidth=linewidth)
-            plt.plot(plot_dataset['ma21'], label='MA-21',
+            plt.plot(x,plot_dataset['ma21'], label='MA-21',
                      linestyle='--', linewidth=linewidth)
-            plt.plot(plot_dataset['ema'], label='EMA',
+            plt.plot(x,plot_dataset['ema'], label='EMA',
                      linestyle=':', linewidth=linewidth)
             plt.legend()
             plt.subplot(3, 1, 2)
@@ -415,12 +420,12 @@ class DataProcessor():
                     label='Amount', width=linewidth)
             plt.legend()
             plt.subplot(3, 1, 3)
-            plt.plot(plot_dataset['volume_delta'], label='volume delta',
+            plt.plot(x,plot_dataset['volume_delta'], label='volume delta',
                      linestyle='-', linewidth=linewidth/2, color='k')
             plt.legend()
             if save:
                 plt.savefig(
-                    'project\\feature_engineering\\30_price_amount.png')
+                    'saved_figures\\30_price_amount.png')
             plt.show()
 
             # 1.MACD
@@ -428,19 +433,23 @@ class DataProcessor():
             linewidth = 1
             plt.subplot(2, 1, 1)
             plt.title('Close price and MACD')
-            plt.plot(plot_dataset['close'], label='Close Price')
+            plt.plot(x, plot_dataset['close'], label='Close Price')
             plt.legend()
             plt.subplot(2, 1, 2)
-            plt.plot(plot_dataset['macd'], label='macd', linewidth=linewidth)
-            plt.plot(plot_dataset['macds'], label='macd signal line',
+            plt.plot(x, plot_dataset['macd'], label='macd', linewidth=linewidth)
+            plt.plot(x, plot_dataset['macds'], label='macd signal line',
                      linestyle='--', linewidth=linewidth)
-            plt.bar(plot_dataset['macdh'].loc[plot_dataset['macdh'] >= 0].index, plot_dataset['macdh']
-                    .loc[plot_dataset['macdh'] >= 0], label='macd histgram', width=linewidth, color='r')
-            plt.bar(plot_dataset['macdh'].loc[plot_dataset['macdh'] < 0].index, plot_dataset['macdh']
-                    .loc[plot_dataset['macdh'] < 0], label='macd histgram', width=linewidth, color='g')
+            try:
+                plt.bar(plot_dataset['macdh'].loc[plot_dataset['macdh'] >= 0].index, plot_dataset['macdh']
+                        .loc[plot_dataset['macdh'] >= 0], label='macd histgram', width=linewidth, color='r')
+                plt.bar(plot_dataset['macdh'].loc[plot_dataset['macdh'] < 0].index, plot_dataset['macdh']
+                        .loc[plot_dataset['macdh'] < 0], label='macd histgram', width=linewidth, color='g')
+            except Exception as e:
+                print(e)
+
             plt.legend()
             if save:
-                plt.savefig('project\\feature_engineering\\31_MACD.png')
+                plt.savefig('saved_figures\\31_MACD.png')
             plt.show()
 
             # 2.KDJ and BOLL
@@ -448,25 +457,25 @@ class DataProcessor():
             linewidth = 1
             plt.subplot(2, 1, 1)
             plt.title('Bolling band and KDJ')
-            plt.plot(plot_dataset['close'], label='Close Price')
-            plt.plot(plot_dataset['boll'], label='Bolling',
+            plt.plot(x, plot_dataset['close'], label='Close Price')
+            plt.plot(x, plot_dataset['boll'], label='Bolling',
                      linestyle='--', linewidth=linewidth)
-            plt.plot(plot_dataset['boll_ub'], color='c',
+            plt.plot(x, plot_dataset['boll_ub'], color='c',
                      label='Bolling up band', linewidth=linewidth)
-            plt.plot(plot_dataset['boll_lb'], color='c',
+            plt.plot(x, plot_dataset['boll_lb'], color='c',
                      label='Bolling low band', linewidth=linewidth)
             plt.fill_between(
                 x, plot_dataset['boll_ub'], plot_dataset['boll_lb'], alpha=0.35)
             plt.legend()
             plt.subplot(2, 1, 2)
-            plt.plot(plot_dataset['kdjk'], label='KDJ-K', linewidth=linewidth)
-            plt.plot(plot_dataset['kdjd'], label='KDJ-K', linewidth=linewidth)
-            plt.plot(plot_dataset['kdjj'], label='KDJ-K', linewidth=linewidth)
+            plt.plot(x, plot_dataset['kdjk'], label='KDJ-K', linewidth=linewidth)
+            plt.plot(x, plot_dataset['kdjd'], label='KDJ-K', linewidth=linewidth)
+            plt.plot(x, plot_dataset['kdjj'], label='KDJ-K', linewidth=linewidth)
             plt.scatter(plot_dataset['kdjk'].loc[plot_dataset['kdjk_3_xu_kdjd_3'] == True].index, plot_dataset['kdjk'].loc[plot_dataset['kdjk_3_xu_kdjd_3'] == True],
                         marker='^', color='r', label='three days KDJK cross up 3 days KDJD')
             plt.legend()
             if save:
-                plt.savefig('project\\feature_engineering\\32_boll_kdj.png')
+                plt.savefig('saved_figures\\32_boll_kdj.png')
             plt.show()
 
             # 3.Open price and RSI
@@ -474,19 +483,19 @@ class DataProcessor():
             linewidth = 1
             plt.subplot(2, 1, 1)
             plt.title('Open price and RSI')
-            plt.plot(plot_dataset['open'], label='Open Price')
+            plt.plot(x, plot_dataset['open'], label='Open Price')
             plt.bar(x, plot_dataset['open_2_d'],
                     label='open delta against next 2 day')
-            plt.plot(
+            plt.plot(x,
                 plot_dataset['open_-2_r'], label='open price change (in percent) between today and the day before yesterday', linewidth=linewidth)
             plt.legend()
             plt.subplot(2, 1, 2)
-            plt.plot(plot_dataset['rsi_12'], label='12 days RSI ', color='c')
-            plt.plot(plot_dataset['rsi_6'], label='6 days RSI',
+            plt.plot(x, plot_dataset['rsi_12'], label='12 days RSI ', color='c')
+            plt.plot(x, plot_dataset['rsi_6'], label='6 days RSI',
                      linewidth=linewidth, color='r')
             plt.legend()
             if save:
-                plt.savefig('project\\feature_engineering\\33_open_rsi.png')
+                plt.savefig('saved_figures\\33_open_rsi.png')
             plt.show()
 
             # 4.CR and WR
@@ -495,23 +504,23 @@ class DataProcessor():
             linewidth = 1
             plt.subplot(2, 1, 1)
             plt.title('WR and CR in 5/10/20 days')
-            plt.plot(plot_dataset['wr_10'], label='10 days WR',
+            plt.plot(x, plot_dataset['wr_10'], label='10 days WR',
                      linestyle='-', linewidth=linewidth, color='g')
-            plt.plot(plot_dataset['wr_6'], label='6 days WR',
+            plt.plot(x, plot_dataset['wr_6'], label='6 days WR',
                      linestyle='-', linewidth=linewidth, color='r')
             plt.legend()
             plt.subplot(2, 1, 2)
             plt.bar(x, plot_dataset['cr'], label='CR indicator',
                     linestyle='--', linewidth=linewidth, color='skyblue')
-            plt.plot(plot_dataset['cr-ma1'], label='CR 5 days MA',
+            plt.plot(x, plot_dataset['cr-ma1'], label='CR 5 days MA',
                      linestyle='-', linewidth=linewidth)
-            plt.plot(plot_dataset['cr-ma2'], label='CR 10 days MA',
+            plt.plot(x, plot_dataset['cr-ma2'], label='CR 10 days MA',
                      linestyle='-', linewidth=linewidth)
-            plt.plot(plot_dataset['cr-ma3'], label='CR 20 days MA',
+            plt.plot(x, plot_dataset['cr-ma3'], label='CR 20 days MA',
                      linestyle='-', linewidth=linewidth)
             plt.legend()
             if save:
-                plt.savefig('project\\feature_engineering\\34_cr_ma.png')
+                plt.savefig('saved_figures\\34_cr_ma.png')
             plt.show()
 
             # 5.CCI TR VR
@@ -520,26 +529,26 @@ class DataProcessor():
             linewidth = 1
             plt.subplot(2, 1, 1)
             plt.title('CCI TR and VR')
-            plt.plot(plot_dataset['tr'],
+            plt.plot(x, plot_dataset['tr'],
                      label='TR (true range)', linewidth=linewidth)
-            plt.plot(
+            plt.plot(x,
                 plot_dataset['atr'], label='ATR (Average True Range)', linewidth=linewidth)
-            plt.plot(
+            plt.plot(x,
                 plot_dataset['trix'], label='TRIX, default to 12 days', linewidth=linewidth)
-            plt.plot(plot_dataset['trix_9_sma'],
+            plt.plot(x, plot_dataset['trix_9_sma'],
                      label='MATRIX is the simple moving average of TRIX', linewidth=linewidth)
             plt.legend()
             plt.subplot(2, 1, 2)
-            plt.plot(plot_dataset['cci'], label='CCI, default to 14 days',
+            plt.plot(x, plot_dataset['cci'], label='CCI, default to 14 days',
                      linestyle='-', linewidth=linewidth, color='r')
-            plt.plot(plot_dataset['cci_20'], label='20 days CCI',
+            plt.plot(x, plot_dataset['cci_20'], label='20 days CCI',
                      linestyle='-', linewidth=linewidth, color='g')
             plt.bar(x, plot_dataset['vr'], label='VR, default to 26 days')
             plt.bar(x, -plot_dataset['vr_6_sma'],
                     label='MAVR is the simple moving average of VR')
             plt.legend()
             if save:
-                plt.savefig('project\\feature_engineering\\35_cci_tr_vr.png')
+                plt.savefig('saved_figures\\35_cci_tr_vr.png')
             plt.show()
 
             # 6.DMI
@@ -553,19 +562,19 @@ class DataProcessor():
                     label='-DI, default to 14 days', color='g')
             plt.legend()
             plt.subplot(3, 1, 2)
-            plt.plot(
+            plt.plot(x,
                 plot_dataset['dma'], label='DMA, difference of 10 and 50 moving average', linewidth=linewidth, color='k')
             plt.legend()
             plt.subplot(3, 1, 3)
-            plt.plot(
+            plt.plot(x,
                 plot_dataset['dx'], label='DX, default to 14 days of +DI and -DI', linewidth=linewidth)
-            plt.plot(plot_dataset['adx'],
+            plt.plot(x, plot_dataset['adx'],
                      label='6 days SMA of DX', linewidth=linewidth)
-            plt.plot(
+            plt.plot(x,
                 plot_dataset['adxr'], label='ADXR, 6 days SMA of ADX', linewidth=linewidth)
             plt.legend()
             if save:
-                plt.savefig('project\\feature_engineering\\36_close_DMI.png')
+                plt.savefig('saved_figures\\36_close_DMI.png')
             plt.show()
 
         return dataset_tech
@@ -605,7 +614,7 @@ class DataProcessor():
             plt.legend()
             if save:
                 plt.savefig(
-                    'project\\feature_engineering\\40_Fourier_transforms.png')
+                    'saved_figures\\40_Fourier_transforms.png')
             plt.show()
 
             from collections import deque
@@ -622,7 +631,7 @@ class DataProcessor():
             plt.title(str(plot_len) + ' Components of Fourier transforms ')
             if save:
                 plt.savefig(
-                    'project\\feature_engineering\\41_Fourier_components.png')
+                    'saved_figures\\41_Fourier_components.png')
             plt.show()
 
         fft_ = fft_df.set_index(data_FT.index).drop(columns='fft')  # 去掉复数的部分
@@ -995,7 +1004,7 @@ class DataVisualiser():
             autocorrelation_plot(series, label='Close price correlations')
             if save:
                 plt.savefig(
-                    'project\\feature_engineering\\50_Close_price_correlations.png')
+                    'saved_figures\\50_Close_price_correlations.png')
 
         X = series.values
         size = int(len(X) * 0.9)
@@ -1023,7 +1032,7 @@ class DataVisualiser():
             plt.title('ARIMA model')
             plt.legend()
             if save:
-                plt.savefig('project\\feature_engineering\\51_ARIMA_model.png')
+                plt.savefig('saved_figures\\51_ARIMA_model.png')
             plt.show()
 
         return summary, predictions
@@ -1082,7 +1091,7 @@ class DataVisualiser():
             plt.legend()
             if save:
                 plt.savefig(
-                    'project\\feature_engineering\\60_Training_Vs_Validation_Error.png')
+                    'saved_figures\\60_Training_Vs_Validation_Error.png')
             plt.show()
 
             fig = plt.figure(figsize=(16, 8))
@@ -1090,7 +1099,7 @@ class DataVisualiser():
             plt.title('Feature importance of the data')
             if save:
                 plt.savefig(
-                    'project\\feature_engineering\\61_Feature_importance.png')
+                    'saved_figures\\61_Feature_importance.png')
             plt.show()
 
         return feature_importance

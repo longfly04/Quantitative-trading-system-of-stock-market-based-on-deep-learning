@@ -26,7 +26,7 @@ class StockHistory():
         para = Parameters(ts_code=st_code, start_date=start_date, end_date=end_date)
         stockdata = StockData(para=para)
         stock_calender = stockdata.getTradeCalender()
-        st_cal = pd.to_datetime(stock_calender['cal_date'])
+        st_cal = pd.to_datetime(stock_calender['cal_date']).unique()
 
         return st_cal
 
