@@ -28,6 +28,9 @@ class TickData(BaseData):
         * last trade in market
         * orderbook snapshot
         * intraday market statistics.
+
+    股票的order book数据，实时性从毫秒级到秒级，
+    市场的买家出价 bid price 和卖家要价 ask price ， bid <= ask
     """
 
     symbol: str
@@ -80,6 +83,8 @@ class TickData(BaseData):
 class BarData(BaseData):
     """
     Candlestick bar data of a certain trading period.
+
+    bar图的数据，用户绘制蜡烛图
     """
 
     symbol: str
@@ -104,6 +109,7 @@ class OrderData(BaseData):
     """
     Order data contains information for tracking lastest status
     of a specific order.
+    订单数据，特指某账户下的订单
     """
 
     symbol: str
@@ -148,6 +154,8 @@ class TradeData(BaseData):
     """
     Trade data contains information of a fill of an order. One order
     can have several trade fills.
+
+    交易数据，一个订单可能有多个交易，订单成交的部分形成一个“交易”
     """
 
     symbol: str
@@ -172,6 +180,8 @@ class TradeData(BaseData):
 class PositionData(BaseData):
     """
     Positon data is used for tracking each individual position holding.
+    
+    头寸数据，头寸也就是现金，可以衍生为资产管理。
     """
 
     symbol: str
@@ -195,6 +205,8 @@ class AccountData(BaseData):
     """
     Account data contains information about balance, frozen and
     available.
+
+    账户数据，balance是什么意思，frozen表示冻结，即已经下单准备交易的现金，available表示可用余额。
     """
 
     accountid: str
@@ -212,6 +224,8 @@ class AccountData(BaseData):
 class LogData(BaseData):
     """
     Log data is used for recording log messages on GUI or in log files.
+
+    日志数据
     """
 
     msg: str
@@ -226,6 +240,8 @@ class LogData(BaseData):
 class ContractData(BaseData):
     """
     Contract data contains basic information about each contract traded.
+
+    合约数据，主要用于期货交易。
     """
 
     symbol: str
@@ -254,6 +270,8 @@ class ContractData(BaseData):
 class SubscribeRequest:
     """
     Request sending to specific gateway for subscribing tick data update.
+
+    对于tick数据的请求包。
     """
 
     symbol: str
@@ -268,6 +286,8 @@ class SubscribeRequest:
 class OrderRequest:
     """
     Request sending to specific gateway for creating a new order.
+
+    对于订单数据的请求包。
     """
 
     symbol: str
@@ -304,6 +324,8 @@ class OrderRequest:
 class CancelRequest:
     """
     Request sending to specific gateway for canceling an existing order.
+
+    对于已经提交的订单，申请取消的请求包。
     """
 
     orderid: str
@@ -319,6 +341,8 @@ class CancelRequest:
 class HistoryRequest:
     """
     Request sending to specific gateway for querying history data.
+
+    对于指定股票历史数据的请求包。
     """
 
     symbol: str

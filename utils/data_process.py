@@ -394,24 +394,29 @@ class DataProcessor():
         dataset_tech['ema'] = dataset_tech['close'].ewm(com=0.5).mean()
         dataset_tech['momentum'] = dataset_tech['close'] - dataset_tech['close'].shift(1)
 
+        ## test ##
+        # print(dataset_tech.columns.values)
+
         if plot:  # 绘制技术指标
-            plot_dataset = dataset_tech
+            # plot_dataset = dataset_tech
             plot_dataset = dataset_tech.iloc[-last_days:, :]
             shape_0 = plot_dataset.shape[0]
             x = [dt.datetime.strptime(i,'%Y%m%d') for i in date_index][-last_days:]
+            x = pd.DatetimeIndex(x)
             colors = self._choose_color(10)
+            plot_dataset = plot_dataset.set_index(x)
 
             # 0.股价、成交量，成交额、MA移动平均线
             plt.figure(figsize=(16, 10), dpi=150)
             linewidth = 1
             plt.subplot(3, 1, 1)
             plt.title('Close Price and Volume Statistics')
-            plt.plot(x,plot_dataset['close'], label='Close Price')
-            plt.plot(x,plot_dataset['ma7'], label='MA-7',
+            plt.plot(plot_dataset['close'], label='Close Price')
+            plt.plot(plot_dataset['ma7'], label='MA-7',
                      linestyle='--', linewidth=linewidth)
-            plt.plot(x,plot_dataset['ma21'], label='MA-21',
+            plt.plot(plot_dataset['ma21'], label='MA-21',
                      linestyle='--', linewidth=linewidth)
-            plt.plot(x,plot_dataset['ema'], label='EMA',
+            plt.plot(plot_dataset['ema'], label='EMA',
                      linestyle=':', linewidth=linewidth)
             plt.legend()
             plt.subplot(3, 1, 2)
@@ -420,7 +425,7 @@ class DataProcessor():
                     label='Amount', width=linewidth)
             plt.legend()
             plt.subplot(3, 1, 3)
-            plt.plot(x,plot_dataset['volume_delta'], label='volume delta',
+            plt.plot(plot_dataset['volume_delta'], label='volume delta',
                      linestyle='-', linewidth=linewidth/2, color='k')
             plt.legend()
             if save:
@@ -433,15 +438,18 @@ class DataProcessor():
             linewidth = 1
             plt.subplot(2, 1, 1)
             plt.title('Close price and MACD')
-            plt.plot(x, plot_dataset['close'], label='Close Price')
+            plt.plot(plot_dataset['close'], label='Close Price')
             plt.legend()
             plt.subplot(2, 1, 2)
-            plt.plot(x, plot_dataset['macd'], label='macd', linewidth=linewidth)
-            plt.plot(x, plot_dataset['macds'], label='macd signal line',
+            plt.plot(plot_dataset['macd'], label='macd', linewidth=linewidth)
+            plt.plot(plot_dataset['macds'], label='macd signal line',
                      linestyle='--', linewidth=linewidth)
             try:
                 plt.bar(plot_dataset['macdh'].loc[plot_dataset['macdh'] >= 0].index, plot_dataset['macdh']
                         .loc[plot_dataset['macdh'] >= 0], label='macd histgram', width=linewidth, color='r')
+            except Exception as e:
+                print(e)
+            try:
                 plt.bar(plot_dataset['macdh'].loc[plot_dataset['macdh'] < 0].index, plot_dataset['macdh']
                         .loc[plot_dataset['macdh'] < 0], label='macd histgram', width=linewidth, color='g')
             except Exception as e:
@@ -457,20 +465,20 @@ class DataProcessor():
             linewidth = 1
             plt.subplot(2, 1, 1)
             plt.title('Bolling band and KDJ')
-            plt.plot(x, plot_dataset['close'], label='Close Price')
-            plt.plot(x, plot_dataset['boll'], label='Bolling',
+            plt.plot(plot_dataset['close'], label='Close Price')
+            plt.plot(plot_dataset['boll'], label='Bolling',
                      linestyle='--', linewidth=linewidth)
-            plt.plot(x, plot_dataset['boll_ub'], color='c',
+            plt.plot(plot_dataset['boll_ub'], color='c',
                      label='Bolling up band', linewidth=linewidth)
-            plt.plot(x, plot_dataset['boll_lb'], color='c',
+            plt.plot(plot_dataset['boll_lb'], color='c',
                      label='Bolling low band', linewidth=linewidth)
             plt.fill_between(
                 x, plot_dataset['boll_ub'], plot_dataset['boll_lb'], alpha=0.35)
             plt.legend()
             plt.subplot(2, 1, 2)
-            plt.plot(x, plot_dataset['kdjk'], label='KDJ-K', linewidth=linewidth)
-            plt.plot(x, plot_dataset['kdjd'], label='KDJ-K', linewidth=linewidth)
-            plt.plot(x, plot_dataset['kdjj'], label='KDJ-K', linewidth=linewidth)
+            plt.plot(plot_dataset['kdjk'], label='KDJ-K', linewidth=linewidth)
+            plt.plot(plot_dataset['kdjd'], label='KDJ-K', linewidth=linewidth)
+            plt.plot(plot_dataset['kdjj'], label='KDJ-K', linewidth=linewidth)
             plt.scatter(plot_dataset['kdjk'].loc[plot_dataset['kdjk_3_xu_kdjd_3'] == True].index, plot_dataset['kdjk'].loc[plot_dataset['kdjk_3_xu_kdjd_3'] == True],
                         marker='^', color='r', label='three days KDJK cross up 3 days KDJD')
             plt.legend()
@@ -483,15 +491,15 @@ class DataProcessor():
             linewidth = 1
             plt.subplot(2, 1, 1)
             plt.title('Open price and RSI')
-            plt.plot(x, plot_dataset['open'], label='Open Price')
+            plt.plot(plot_dataset['open'], label='Open Price')
             plt.bar(x, plot_dataset['open_2_d'],
                     label='open delta against next 2 day')
-            plt.plot(x,
+            plt.plot(
                 plot_dataset['open_-2_r'], label='open price change (in percent) between today and the day before yesterday', linewidth=linewidth)
             plt.legend()
             plt.subplot(2, 1, 2)
-            plt.plot(x, plot_dataset['rsi_12'], label='12 days RSI ', color='c')
-            plt.plot(x, plot_dataset['rsi_6'], label='6 days RSI',
+            plt.plot(plot_dataset['rsi_12'], label='12 days RSI ', color='c')
+            plt.plot(plot_dataset['rsi_6'], label='6 days RSI',
                      linewidth=linewidth, color='r')
             plt.legend()
             if save:
@@ -504,19 +512,19 @@ class DataProcessor():
             linewidth = 1
             plt.subplot(2, 1, 1)
             plt.title('WR and CR in 5/10/20 days')
-            plt.plot(x, plot_dataset['wr_10'], label='10 days WR',
+            plt.plot(plot_dataset['wr_10'], label='10 days WR',
                      linestyle='-', linewidth=linewidth, color='g')
-            plt.plot(x, plot_dataset['wr_6'], label='6 days WR',
+            plt.plot(plot_dataset['wr_6'], label='6 days WR',
                      linestyle='-', linewidth=linewidth, color='r')
             plt.legend()
             plt.subplot(2, 1, 2)
             plt.bar(x, plot_dataset['cr'], label='CR indicator',
                     linestyle='--', linewidth=linewidth, color='skyblue')
-            plt.plot(x, plot_dataset['cr-ma1'], label='CR 5 days MA',
+            plt.plot(plot_dataset['cr-ma1'], label='CR 5 days MA',
                      linestyle='-', linewidth=linewidth)
-            plt.plot(x, plot_dataset['cr-ma2'], label='CR 10 days MA',
+            plt.plot(plot_dataset['cr-ma2'], label='CR 10 days MA',
                      linestyle='-', linewidth=linewidth)
-            plt.plot(x, plot_dataset['cr-ma3'], label='CR 20 days MA',
+            plt.plot(plot_dataset['cr-ma3'], label='CR 20 days MA',
                      linestyle='-', linewidth=linewidth)
             plt.legend()
             if save:
@@ -529,19 +537,19 @@ class DataProcessor():
             linewidth = 1
             plt.subplot(2, 1, 1)
             plt.title('CCI TR and VR')
-            plt.plot(x, plot_dataset['tr'],
+            plt.plot(plot_dataset['tr'],
                      label='TR (true range)', linewidth=linewidth)
-            plt.plot(x,
+            plt.plot(
                 plot_dataset['atr'], label='ATR (Average True Range)', linewidth=linewidth)
-            plt.plot(x,
+            plt.plot(
                 plot_dataset['trix'], label='TRIX, default to 12 days', linewidth=linewidth)
-            plt.plot(x, plot_dataset['trix_9_sma'],
+            plt.plot(plot_dataset['trix_9_sma'],
                      label='MATRIX is the simple moving average of TRIX', linewidth=linewidth)
             plt.legend()
             plt.subplot(2, 1, 2)
-            plt.plot(x, plot_dataset['cci'], label='CCI, default to 14 days',
+            plt.plot(plot_dataset['cci'], label='CCI, default to 14 days',
                      linestyle='-', linewidth=linewidth, color='r')
-            plt.plot(x, plot_dataset['cci_20'], label='20 days CCI',
+            plt.plot(plot_dataset['cci_20'], label='20 days CCI',
                      linestyle='-', linewidth=linewidth, color='g')
             plt.bar(x, plot_dataset['vr'], label='VR, default to 26 days')
             plt.bar(x, -plot_dataset['vr_6_sma'],
@@ -562,15 +570,15 @@ class DataProcessor():
                     label='-DI, default to 14 days', color='g')
             plt.legend()
             plt.subplot(3, 1, 2)
-            plt.plot(x,
+            plt.plot(
                 plot_dataset['dma'], label='DMA, difference of 10 and 50 moving average', linewidth=linewidth, color='k')
             plt.legend()
             plt.subplot(3, 1, 3)
-            plt.plot(x,
+            plt.plot(
                 plot_dataset['dx'], label='DX, default to 14 days of +DI and -DI', linewidth=linewidth)
-            plt.plot(x, plot_dataset['adx'],
+            plt.plot(plot_dataset['adx'],
                      label='6 days SMA of DX', linewidth=linewidth)
-            plt.plot(x,
+            plt.plot(
                 plot_dataset['adxr'], label='ADXR, 6 days SMA of ADX', linewidth=linewidth)
             plt.legend()
             if save:
@@ -580,7 +588,7 @@ class DataProcessor():
         return dataset_tech
 
     @info
-    def cal_fft(self, data, plot=False, save=False):
+    def cal_fft(self, data, plot=False, save=False, plot_days=2000):
         """
         计算傅里叶变换 
 
@@ -837,11 +845,14 @@ class DataProcessor():
 
         full_data_ = np.concatenate(full_data, axis=1)
 
-        pca = PCA(n_components=pca_comp)
+        if pca < 1:
+            # pca 以0.9999的百分比保留方差，默认0.99，若等于1，则不进行主成分分析
+            pca = PCA(n_components=pca_comp)
+            pca_data = pca.fit_transform(full_data_)
 
-        pca_data = pca.fit_transform(full_data_)
-
-        return pca_data
+            return pca_data
+        else:
+            return full_data_
 
     @info
     def split_train_test_date(self, date_price_index):

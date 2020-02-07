@@ -16,9 +16,26 @@ from keras import activations, constraints, initializers, regularizers
 from keras.layers import *
 from keras import Model
 from keras.models import Sequential, load_model
-from keras.callbacks import EarlyStopping, ModelCheckpoint, TensorBoard
+from keras.callbacks import Callback, EarlyStopping, ModelCheckpoint, TensorBoard
+from sklearn.metrics import r2_score,
 
 from utils.tools import *
+
+
+class Metrics(Callback):
+    def on_train_begin(self, logs={}):
+        self.r2_score = []
+
+    def on_epoch_end(self, epoch, logs={}):
+        val_predict = (numpy.asarray(self.model.predict(
+            self.validation_data[0]))).round()
+        val_targ = self.validation_data[1]
+        _val_f1 = f1_score(val_targ, val_predict)
+        _val_recall = recall_score(val_targ, val_predict)
+        _val_precision = precision_score(val_targ, val_predict)
+        self.val_f1s.append(_val_f1)
+        self.val_recalls.append(_val_recall)
+        self.val_precisions.append(_val_precision)
 
 class LSTM_Model(Model):
     def __init__(self, config, name=None, **kwargs):
@@ -89,10 +106,11 @@ class LSTM_Model(Model):
         save_fname = os.path.join(self.train_cfg['save_path'],
                                  '%s-e%s.h5' % (dt.datetime.now().strftime('%Y%m%d-%H%M%S'), 
                                  str(self.train_cfg['epochs'])))
+
         callbacks = [
             EarlyStopping(monitor='val_loss', patience=3),
             ModelCheckpoint(filepath=save_fname, monitor='val_loss', save_best_only=True),
-            TensorBoard(log_dir=self.train_cfg['tensorboard_dir'])
+            TensorBoard(log_dir=self.train_cfg['tensorboard_dir'],
         ]
 
         x = x[x.shape[0]%self.train_cfg['batch_size']:]
@@ -123,14 +141,15 @@ class LSTM_Model(Model):
         callbacks = [
             # EarlyStopping(monitor='val_loss', patience=2),
             # ModelCheckpoint(filepath=save_fname, monitor='val_loss', save_best_only=True),
-            TensorBoard(log_dir=self.train_cfg['tensorboard_dir'])
+            TensorBoard(log_dir=self.train_cfg['tensorboard_dir'],
+            
         ]
 
         self.history = self.model.fit_generator(
                                                 xy_gen,
                                                 steps_per_epoch=self.epoch_steps[0],
                                                 epochs=self.train_cfg['epochs'],
-                                                # callbacks=callbacks,
+                                                callbacks=callbacks,
                                                 validation_data=val_gen,
                                                 validation_steps=self.epoch_steps[1],
                                                 validation_freq=self.train_cfg['validation_freq']

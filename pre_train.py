@@ -17,6 +17,7 @@ def main():
     data_pro = DataProcessor(config)
     # 对时间进行编码
     (date_list, embeddings_list) = data_pro.encode_date_embeddings(stock_his.stock_calender)
+    
     # 对多只股票的数据进行训练
     for idx, data in enumerate(stock_his.stock_history):
         # 参考交易日日历，对数据集的日期时间进行验证
@@ -24,9 +25,9 @@ def main():
         # 去重和填充空值
         data_ = data_pro.drop_dup_fill_nan(data_)
         # 计算技术指标
-        data_tec = data_pro.cal_technical_indicators(data_, date_index=date_list, plot=True, save=True)
+        data_tec = data_pro.cal_technical_indicators(data_, date_index=date_list)
         # 计算傅里叶变换
-        data_fft = data_pro.cal_fft(data_)
+        data_fft = data_pro.cal_fft(data_, plot=True, save=True)
         # 计算日行情
         daily_quotes = data_pro.cal_daily_quotes(data_)
         # 将数据列中日行情列剔除，日期列剔除
@@ -73,7 +74,7 @@ def main():
         train_gen = data_pro.batch_data_generator(x, y, date_price_index, date_range_dict, 'train')
         val_gen = data_pro.batch_data_generator(x, y, date_price_index, date_range_dict, 'validation')
         reinforcement = data_pro.batch_data_generator(x, y, date_price_index, date_range_dict, 'reinforcement')
-        # predict_gen = data_pro.batch_data_generator(x, y, date_price_index, date_range_dict, 'predict')
+        
         # 定义模型
         stock_name = stock_his.stock_info[idx]['symbol']
         model = LSTM_Model(config, name=stock_name)

@@ -66,7 +66,7 @@ class BaseGateway(ABC):
     So if you use a cache to store reference of data, use copy.copy to create a new object
     before passing that data into on_xxxx
 
-
+    Gateway用于向代理商交互数据，实现对账户资产和市场订单的综合管理。
 
     """
 
@@ -84,6 +84,8 @@ class BaseGateway(ABC):
     def on_event(self, type: str, data: Any = None):
         """
         General event push.
+
+        通用的事件函数，用于各种事件的发送。
         """
         event = Event(type, data)
         self.event_engine.put(event)
@@ -263,6 +265,8 @@ class BaseGateway(ABC):
 class LocalOrderManager:
     """
     Management tool to support use local order id for trading.
+
+    本地订单管理，区别于从代理商获取的订单数据管理。
     """
 
     def __init__(self, gateway: BaseGateway, order_prefix: str = ""):

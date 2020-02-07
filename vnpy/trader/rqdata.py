@@ -27,6 +27,8 @@ INTERVAL_ADJUSTMENT_MAP = {
 class RqdataClient:
     """
     Client for querying history data from RQData.
+
+    获取历史数据的高性能接口 RQdata
     """
 
     def __init__(self):
