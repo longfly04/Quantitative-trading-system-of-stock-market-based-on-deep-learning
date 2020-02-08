@@ -206,7 +206,7 @@ class AccountData(BaseData):
     Account data contains information about balance, frozen and
     available.
 
-    账户数据，balance是什么意思，frozen表示冻结，即已经下单准备交易的现金，available表示可用余额。
+    账户数据，balance是总资金，frozen表示冻结，即已经下单准备交易的现金，available表示可用余额。
     """
 
     accountid: str
