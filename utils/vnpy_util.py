@@ -9,7 +9,7 @@ from .vnpy.trader.event import (EVENT_TICK,
 
 class PortfolioManager:
     """
-    本地资产计算和管理，便于实现离线算法训练
+    本地资产计算和管理中间件，传入资产和价格之后计算资产向量
     """
     def __init__(self, gateway:XTPGateway, event_engine: EventEngine):
         """"""
@@ -59,7 +59,7 @@ class PortfolioManager:
 
 class OrderProcesser:
     """
-    算法结果与平台之间的中间件，用于对结果进行处理并交给平台形成订单
+    算法结果与平台之间的中间件，传入决策向量并生成订单
     """
     def __init__(self, local_order_mgr:LocalOrderManager, 
                        portfolio_mgr: PortfolioManager, 
