@@ -24,12 +24,7 @@ EVENT_PORTFOLIO_TRADE = "ePortfioTrade"
 
 
 class PortfolioEngine(BaseEngine):
-    """
-    这里的资产管理是指对于一些对冲策略中的资产进行策略性绑定，实现同时购买多种资产的效果。
-
-    但是在单纯股票多资产管理中，主要是实现资本管理功能。
-    
-    """
+    """"""
     setting_filename = "portfolio_manager_setting.json"
 
     def __init__(self, main_engine: MainEngine, event_engine: EventEngine):
@@ -322,9 +317,7 @@ class PortfolioStrategy:
         self.calculate_pnl()
 
     def calculate_pnl(self):
-        """
-        pnl是什么意思，看公式应该是
-        """
+        """"""
         self.pos_pnl = (self.last_price - self.open_price) * \
             self.net_pos * self.size
 

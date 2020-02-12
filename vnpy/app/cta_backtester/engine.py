@@ -145,38 +145,36 @@ class BacktesterEngine(BaseEngine):
         """"""
         self.result_df = None
         self.result_statistics = None
-        try:
-            engine = self.backtesting_engine
-            engine.clear_data()
 
-            engine.set_parameters(
-                vt_symbol=vt_symbol,
-                interval=interval,
-                start=start,
-                end=end,
-                rate=rate,
-                slippage=slippage,
-                size=size,
-                pricetick=pricetick,
-                capital=capital,
-                inverse=inverse
-            )
+        engine = self.backtesting_engine
+        engine.clear_data()
 
-            strategy_class = self.classes[class_name]
-            engine.add_strategy(
-                strategy_class,
-                setting
-            )
+        engine.set_parameters(
+            vt_symbol=vt_symbol,
+            interval=interval,
+            start=start,
+            end=end,
+            rate=rate,
+            slippage=slippage,
+            size=size,
+            pricetick=pricetick,
+            capital=capital,
+            inverse=inverse
+        )
 
-            engine.load_data()
-            engine.run_backtesting()
-            self.result_df = engine.calculate_result()
-            self.result_statistics = engine.calculate_statistics(output=False)
-        except:
-            self.write_log("[New Feature] 回测过程发生错误，回测线程已经终止。")
-        finally:
-            # Clear thread object handler.
-            self.thread = None
+        strategy_class = self.classes[class_name]
+        engine.add_strategy(
+            strategy_class,
+            setting
+        )
+
+        engine.load_data()
+        engine.run_backtesting()
+        self.result_df = engine.calculate_result()
+        self.result_statistics = engine.calculate_statistics(output=False)
+
+        # Clear thread object handler.
+        self.thread = None
 
         # Put backtesting done event
         event = Event(EVENT_BACKTESTER_BACKTESTING_FINISHED)
