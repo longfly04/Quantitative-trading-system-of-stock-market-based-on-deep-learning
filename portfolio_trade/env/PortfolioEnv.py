@@ -9,11 +9,13 @@ import time
 import gym
 import gym.spaces
 
-from ..config import eps
-from ..data.utils import normalize, random_shift, scale_to_start
-from ..util import MDD as max_drawdown, sharpe, softmax
-from ..callbacks.notebook_plot import LivePlotNotebook
+import os
+import numpy as np
+from matplotlib import pyplot as plt
+import matplotlib
+import logging
 
+eps = 1e-7
 logger = logging.getLogger(__name__)
 
 
@@ -110,8 +112,8 @@ class DataSrc(object):
                 low=self.window_length + 1, high=self._data.shape[1] - self.steps - 2)
         else:
             # continue sequentially, before reseting to start
-            if self.idx>(self._data.shape[1] - self.steps - self.window_length - 1):
-                self.idx=self.window_length + 1
+            if self.idx > (self._data.shape[1] - self.steps - self.window_length - 1):
+                self.idx = self.window_length + 1
             else:
                 self.idx += self.steps
         data = self._data[:, self.idx -
@@ -385,7 +387,6 @@ class PortfolioEnv(gym.Env):
                     for name in all_assets]
         self._plot.update(x, y_assets + [y_portfolio])
 
-
         # plot portfolio weights
         if not self._plot2:
             self._plot_dir2 = os.path.join(
@@ -406,3 +407,128 @@ class PortfolioEnv(gym.Env):
 
         if close:
             self._plot = self._plot2 = self._plot3 = None
+
+
+class LivePlotNotebook(object):
+    """
+    Live plot using `%matplotlib notebook` in jupyter
+
+    Usage:
+    liveplot = LivePlotNotebook(labels=['a','b'])
+    x = range(10)
+    ya = np.random.random((10))
+    yb = np.random.random((10))
+    liveplot.update(x, [ya,yb])
+    """
+
+    def __init__(self, log_dir=None, episode=0, labels=[], title='', ylabel='returns', colors=None, linestyles=None, legend_outside=True):
+        if not matplotlib.rcParams['backend'] == 'nbAgg':
+            logging.warn(
+                "The liveplot callback only work when matplotlib is using the nbAgg backend. Execute 'matplotlib.use('nbAgg', force=True)'' or '%matplotlib notebook'")
+
+        self.log_dir = log_dir
+        if log_dir:
+            try:
+                os.makedirs(log_dir)
+            except OSError:
+                pass
+        self.i = episode
+
+        fig, ax = plt.subplots(1, 1)
+
+        for i in range(len(labels)):
+            ax.plot(
+                [0] * 20,
+                label=labels[i],
+                alpha=0.75,
+                lw=2,
+                color=colors[i] if colors else None,
+                linestyle=linestyles[i] if linestyles else None,
+            )
+
+        ax.set_xlim(0, 1)
+        ax.set_ylim(0, 1)
+        ax.set_xlabel('date')
+        ax.set_ylabel(ylabel)
+        ax.grid()
+        ax.set_title(title)
+
+        # give the legend it's own space, the right 20% where it right align left
+        if legend_outside:
+            fig.subplots_adjust(right=0.8)
+            ax.legend(loc='center left', bbox_to_anchor=(
+                1.0, 0.5), frameon=False)
+        else:
+            ax.legend()
+
+        self.ax = ax
+        self.fig = fig
+
+    def update(self, x, ys):
+        x = np.array(x)
+
+        for i in range(len(ys)):
+            # update price
+            line = self.ax.lines[i]
+            line.set_xdata(x)
+            line.set_ydata(ys[i])
+
+        # update limits
+        y = np.concatenate(ys)
+        y_extra = y.std() * 0.1
+        if x.min() != x.max():
+            self.ax.set_xlim(x.min(), x.max())
+        if (y.min() - y_extra) != (y.max() + y_extra):
+            self.ax.set_ylim(y.min() - y_extra, y.max() + y_extra)
+
+        if self.log_dir:
+            self.fig.savefig(os.path.join(
+                self.log_dir, '%i_liveplot.png' % self.i))
+        self.fig.canvas.draw()
+        self.i += 1
+
+
+def sharpe(returns, freq=30, rfr=0.0):
+    """Given a set of returns, calculates naive (rfr=0) sharpe (eq 28) """
+    return (np.sqrt(freq) * np.mean(returns - rfr)) / (np.std(returns - rfr) + eps)
+
+
+def max_drawdown(X):
+    """By nicktids, see issue 15."""
+    mdd = 0
+    peak = X[0]
+    for x in X:
+        if x > peak:
+            peak = x
+        dd = (peak - x) / peak
+        if dd > mdd:
+            mdd = dd
+    return mdd
+
+
+def softmax(w, t=1.0):
+    """softmax implemented in numpy."""
+    log_eps = np.log(eps)
+    w = np.clip(w, log_eps, -log_eps)  # avoid inf/nan
+    e = np.exp(np.array(w) / t)
+    dist = e / np.sum(e)
+    return dist
+
+
+def random_shift(x, fraction):
+    """Apply a random shift to a pandas series."""
+    min_x, max_x = np.min(x), np.max(x)
+    m = np.random.uniform(-fraction, fraction, size=x.shape) + 1
+    return np.clip(x * m, min_x, max_x)
+
+
+def normalize(x):
+    """Normalize to a pandas series."""
+    x = (x - x.mean()) / (x.std() + eps)
+    return x
+
+
+def scale_to_start(x):
+    """Scale pandas series so that it starts at one."""
+    x = (x + eps) / (x[0] + eps)
+    return x

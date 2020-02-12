@@ -4,15 +4,15 @@
 
 from time import sleep
 from vnpy.app.script_trader import ScriptEngine
-from .vnpy_util import PortfolioManager, OrderProcessor
+# from .utils.vnpy_util import PortfolioManager, OrderProcessor
 
 
 def run(engine: ScriptEngine):
     """
     脚本策略的主函数说明：
-    1. 唯一入参是脚本引擎ScriptEngine对象，通用它来完成查询和请求操作
-    2. 该函数会通过一个独立的线程来启动运行，区别于其他策略模块的事件驱动
-    3. while循环的维护，请通过engine.strategy_active状态来判断，实现可控退出
+        1. 唯一入参是脚本引擎ScriptEngine对象，通用它来完成查询和请求操作
+        2. 该函数会通过一个独立的线程来启动运行，区别于其他策略模块的事件驱动
+        3. while循环的维护，请通过engine.strategy_active状态来判断，实现可控退出
 
     流程：
         1.读取股票池，拉取行情
@@ -40,12 +40,16 @@ def run(engine: ScriptEngine):
     问题：
         1.模型训练时，判断订单成交的依据：提交订单价格在high~low之内，否则不成交
         2.模型决策的内容，包括成交量和成交价，分别为Box行为，其中成交量单位-手，价格单位0.01元
-        3.
+        3.每次observe是延迟到次日才能得到结果（关于成交和冻结资金处理问题）
+        4.
     """
-    vt_symbols = ["IF1912.CFFEX", "rb2001.SHFE"]
+
+    vt_symbols = ["600196.SSH", "600585.SSH"]
 
     # 订阅行情
     engine.subscribe(vt_symbols)
+
+    msg = f"订阅股票为：{vt_symbols}"
 
     # 获取合约信息
     for vt_symbol in vt_symbols:
@@ -63,3 +67,8 @@ def run(engine: ScriptEngine):
 
         # 等待3秒进入下一轮
         sleep(3)
+
+
+if __name__ == '__main__':
+    s_engine = ScriptEngine
+    run(s_engine)
