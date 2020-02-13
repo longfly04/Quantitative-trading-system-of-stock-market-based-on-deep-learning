@@ -845,7 +845,7 @@ class DataProcessor():
 
         full_data_ = np.concatenate(full_data, axis=1)
 
-        if pca < 1:
+        if pca_comp < 1:
             # pca 以0.9999的百分比保留方差，默认0.99，若等于1，则不进行主成分分析
             pca = PCA(n_components=pca_comp)
             pca_data = pca.fit_transform(full_data_)

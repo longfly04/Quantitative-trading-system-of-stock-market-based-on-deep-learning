@@ -64,12 +64,12 @@ def info(func):
     def log(*args,**kwargs):
         logger = Logger()
         try:
-            print("[INFO] Method: \" {name} \" is starting...".format(name = func.__name__))
+            logger.info("Method: \" {name} \" is starting...".format(name = func.__name__))
             timer = Timer(func.__name__)
             timer.start()
             result = func(*args,**kwargs)
             timer.stop()
-            print("[INFO] Method: \" {name} \" is completed .".format(name = func.__name__))
+            logger.info("Method: \" {name} \" is completed .".format(name = func.__name__))
             return result
         except Exception as e:
             logger.get_logger().error(f"{func.__name__} is error,here are details:{traceback.format_exc()}")
