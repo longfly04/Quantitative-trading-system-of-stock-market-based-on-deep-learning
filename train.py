@@ -26,11 +26,54 @@
         1.模型训练时，判断订单成交的依据：提交订单价格在high~low之内，否则不成交
         2.模型决策的内容，包括成交量和成交价，分别为Box行为，其中成交量单位-手，价格单位0.01元
         3.每次observe是延迟到次日才能得到结果（关于成交和冻结资金处理问题）
-        4.
+        4.配置文件在训练阶段作为参数传入各个组件中，而不是在组件定义时与配置文件绑定，减少耦合性
 
     配置文件：
         1.数据配置文件：记录最新数据时间，避免重复训练，记录数据时间索引，训练用参数文件索引等
         2.时序预测模型配置文件：记录超参数
         3.环境配置文件：记录环境配置参数，强化学习算法参数
 """
+import json
+from utils.data_manage import StockManager, PortfolioManager, DataDownloader
+from utils.data_process import DataProcessor
+from utils.order_process import OrderProcessor, TradeSimulator
 
+def prepare_train(config):
+    """
+    数据准备
+    """
+
+
+
+def train_timeseries():
+    """
+    训练时序模型
+    """
+
+def train_reinforcement():
+    """
+    训练强化模型
+    """
+
+def trade_process():
+    """
+    处理订单
+    """
+
+def connect_vnpy():
+    """
+    通过vnpy发送订单
+    """
+
+def main():
+    """"""
+    with open('config.json') as f:
+        config = json.load(f)
+    prepare_train(config)
+
+
+    print("A lot of work to do ...")
+
+
+if __name__ == '__main__':
+    main()
