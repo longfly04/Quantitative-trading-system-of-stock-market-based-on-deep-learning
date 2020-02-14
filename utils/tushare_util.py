@@ -25,7 +25,7 @@ class DailyDownloader():
         stock_code: 6位股票代码，字符串形式
     '''
 
-    def __init__(self, start_date, end_date, stock_code):
+    def __init__(self, start_date, end_date, stock_code, save_dir=None):
         if isinstance(start_date, str) == False:
             try:
                 start_date = str(start_date)
@@ -50,6 +50,7 @@ class DailyDownloader():
         self.start_date = dt.datetime.strptime(start_date, '%Y%m%d')
         self.end_date = dt.datetime.strptime(end_date, '%Y%m%d')
         self.stock_code = stock_code
+        self.save_dir = save_dir
         self.paralist = []
         for i in range(self.start_date.year, self.end_date.year + 1):
             para = Parameters(ts_code=self.stock_code,
@@ -97,7 +98,7 @@ class DailyDownloader():
         print('Get {0} stock market data at {1} dimentions and {2} rows.'.format(
             self.stock_code, total.shape[1], total.shape[0]))
         if save:
-            total.to_csv('dataset\\Dailystock-'+self.stock_code+'.csv')
+            total.to_csv(self.save_dir + '\\Dailystock-'+self.stock_code+'.csv')
         return total
 
     @info
@@ -258,7 +259,7 @@ class DailyDownloader():
         print('[Download] Get {0} daily total data at {1} dimentions and {2} rows.'.format(
             self.stock_code, total.shape[1], total.shape[0]))
         if save:
-            total.to_csv('dataset\\daily_total_'+self.stock_code[:-3]+'.csv')
+            total.to_csv(self.save_dir + '\\daily_total_' + self.stock_code[:-3]+'.csv')
         return total
 
 

@@ -38,17 +38,24 @@ from utils.data_manage import StockManager, PortfolioManager, DataDownloader
 from utils.data_process import DataProcessor
 from utils.order_process import OrderProcessor, TradeSimulator
 
-def prepare_train(config):
+def prepare_train(config=None):
     """
     数据准备
     """
-    data_downloader = DataDownloader()
+    data_cfg = config['data']
 
-    stock_mgr = StockManager(data_path=config['data_dir'],
-                            stock_pool=config['stock_code'],
-                            trade_calender=None,
-                            date_col=config['date_col'],
-                            quote_col=config['daily_quotes'])
+    data_downloader = DataDownloader(data_path=data_cfg['data_dir'],
+                                     stock_list_file=data_cfg['SH50_list_path'],
+                                     download_mode='additional',
+                                     start_date=data_cfg['date_range'][0],
+                                     date_col=data_cfg['date_col'])
+    trade_calender = data_downloader.get_calender()
+
+    stock_mgr = StockManager(data_path=data_cfg['data_dir'],
+                            stock_pool=data_cfg['stock_code'],
+                            trade_calender=trade_calender,
+                            date_col=data_cfg['date_col'],
+                            quote_col=data_cfg['daily_quotes'])
 
 
 
@@ -74,7 +81,7 @@ def connect_vnpy():
 
 def main():
     """"""
-    with open('config.json') as f:
+    with open('config.json', 'r', encoding='utf-8') as f:
         config = json.load(f)
     prepare_train(config)
 

@@ -1,35 +1,100 @@
 import numpy as np 
 import pandas as pd 
-import time
+import datetime
 import os
 from vnpy.trader.constant import *
 from vnpy.trader.object import *
 
 from utils.tushare_util import DailyDownloader
+from utils.base.stock import Parameters, StockData
 
 
 class DataDownloader(object):
     """
     数据下载器，包含完整下载和增量下载，数据输出至本地数据库
     """
-    def __init__(self, data_path, stock_pool:list, download_mode:str, ):
+    def __init__(self, data_path, stock_list_file:str, download_mode:str, start_date:str, date_col):
+        """
+        参数：
+            data_path：存放数据路径
+            stock_list_file:股票列表文件，从文件读取一揽子股票
+            download_mode：下载模型，增量或者全量
+        """
         self.data_path = data_path
-        self.stock_pool = stock_pool
-        self.donwload_mode = download_mode
+        self.stock_list_file = stock_list_file
+        self.download_mode = download_mode
+        self.start_date = start_date
+        self.date_col = date_col
 
     def download_stock(self, date:str):
         """
         更新股票池中的记录（截止最新）
         """
+        current_date = datetime.strftime(datetime.now.date(), format="%Y%M%D")
+
+        with open(self.stock_list_file, encoding='UTF-8') as f:
+            stock_dict = {}
+            for line in f.readlines():
+                if line == '\n':
+                    break
+                l = list(line.rstrip('\n').split())
+                stock_dict[l[0]] = l[1][1:-1]
+
+        if self.download_mode == 'total':
+            # 全量下载
+            for k,v in stock_dict.items():
+                # md = MinuteDownloader(start_date='20190101', end_date='20191231', stock_code=str(v))
+                # minutes_data = md.downloadMinutes(save=False)
+                dd = DailyDownloader(start_date=self.start_date, 
+                                     end_date=current_date, 
+                                     stock_code=str(v), 
+                                     save_dir=self.data_path
+                                     )
+                daily_data = dd.downloadDaily(save=True)
+                print('Complete %s total downloading from %s to %s.' %(k, self.start_date, current_date))
+
+        elif self.download_mode == 'additional':
+            # 增量下载，可以提高速度
+            for k,v in stock_dict.items():
+                try:
+                    path_ = search_file(self.data_path, v)
+                    old_data = pd.read_csv(path_[0])
+                    old_cal_date = old_data[self.date_col].value()
+                    dd = DailyDownloader(start_date=old_cal_date, 
+                                         end_date=current_date, 
+                                         stock_code=str(v),
+                                        )
+                    additional_data = dd.downloadDaily(save=False)
+                    additional_data.to_csv(path_[0], mode='a+', header=False)
+                    print('Complete %s additional downloading from %s to %s.' %(k, old_cal_date, current_date))
+                except Exception as e:
+                    print(e)
 
     def download_portfolio(self, ):
         """
         从经纪人获取账户最新资产情况，存入本地文件
         """
 
-    def download_canlender(self,):
+    def get_calender(self,):
         """
         下载最新的交易日历
+        """
+        current_date = datetime.strftime(datetime.now.date(), format="%Y%M%D")
+        start_date = self.start_date
+        end_date = current_date
+        assert isinstance(self.stock_code_list, list)
+
+        st_code = self.stock_code_list[0]
+        para = Parameters(ts_code=st_code, start_date=start_date, end_date=end_date)
+        stockdata = StockData(para=para)
+        stock_calender = stockdata.getTradeCalender()
+        self.calender = pd.to_datetime(stock_calender['cal_date']).unique()
+
+        return self.calender
+
+    def connect_vnpy(self,):
+        """
+        通过客户端的形式访问vnpy并获取账户资金
         """
 
 
@@ -61,11 +126,12 @@ class StockManager(object):
         加载最新数据
         """
         for st in self.stock_pool:
-            for f in os.listdir(self.data_path):
-                f_path = os.path.join(self.data_path, f)
-                if st in f_path:
-                    his_data = pd.read_csv(f_path)
-                    self.stock_data_list.append(his_data)
+            path_ = search_file(self.data_path, st)
+            try:
+                data = pd.read_csv(path_[0])
+                self.stock_data_list.append(data)
+            except Exception as e:
+                print(e,)
         self.preprocessed = False
 
     def global_preprocess(self, ):
@@ -159,4 +225,16 @@ class PortfolioManager(object):
         从本地数据文件获取最新的资产情况
         """
 
-
+def search_file(path=None, filename=None):
+    """
+    递归查询文件下包含指定字符串的文件
+    """
+    res = []
+    for item in os.listdir(path):
+        item_path = os.path.join(path, item)
+        if os.path.isdir(item_path):
+            search_file(item_path, filename)
+        elif os.path.isfile(item_path):
+            if filename in item_path:
+                res.append(item_path)
+    return res
