@@ -7,6 +7,32 @@ from vnpy.trader.object import *
 
 from utils.tushare_util import DailyDownloader
 
+
+class DataDownloader(object):
+    """
+    数据下载器，包含完整下载和增量下载，数据输出至本地数据库
+    """
+    def __init__(self, data_path, stock_pool:list, download_mode:str, ):
+        self.data_path = data_path
+        self.stock_pool = stock_pool
+        self.donwload_mode = download_mode
+
+    def download_stock(self, date:str):
+        """
+        更新股票池中的记录（截止最新）
+        """
+
+    def download_portfolio(self, ):
+        """
+        从经纪人获取账户最新资产情况，存入本地文件
+        """
+
+    def download_canlender(self,):
+        """
+        下载最新的交易日历
+        """
+
+
 class StockManager(object):
     """
     股票数据管理器，为预测模型和决策模型提供数据
@@ -47,6 +73,8 @@ class StockManager(object):
         对整个股票数据进行预处理
         """
         processed_list = []
+        assert self.trade_calender is not None
+
         for data in self.stock_data_list:
             # 验证时间索引唯一性
             date_col = self.date_col
@@ -131,26 +159,4 @@ class PortfolioManager(object):
         从本地数据文件获取最新的资产情况
         """
 
-
-class DataDownloader(object):
-    """
-    数据下载器，包含完整下载和增量下载，数据输出至本地数据库
-    """
-    def __init__(self, config):
-        self.cfg = config
-
-    def download_stock(self, date:str):
-        """
-        更新股票池中的记录（截止最新）
-        """
-
-    def download_portfolio(self, ):
-        """
-        从经纪人获取账户最新资产情况，存入本地文件
-        """
-
-    def download_canlender(self,):
-        """
-        下载最新的交易日历
-        """
 

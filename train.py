@@ -42,17 +42,24 @@ def prepare_train(config):
     """
     数据准备
     """
+    data_downloader = DataDownloader()
+
+    stock_mgr = StockManager(data_path=config['data_dir'],
+                            stock_pool=config['stock_code'],
+                            trade_calender=None,
+                            date_col=config['date_col'],
+                            quote_col=config['daily_quotes'])
 
 
 
-def train_timeseries():
+def train_forecasting():
     """
-    训练时序模型
+    训练预测模型
     """
 
-def train_reinforcement():
+def train_decision():
     """
-    训练强化模型
+    训练决策模型
     """
 
 def trade_process():
