@@ -14,11 +14,11 @@ class Portfolio_Prediction_Env(gym.Env):
 
         data source：
             股票池行情Q_t                        shape:(股票池宽度N, 历史时间T, 行情列数quote_col_num)
+            预测股价的step by step历史Prd_t       shape:(股票池宽度N, 预测历史时间T', 预测长度pred_len)
+            预测方差（转化为风险系数）Var_t        shape:(股票池宽度N, 预测历史时间T', 1)
             资产价格P_t                          shape:(历史时间T, n_asset+1, )
             持有量历史V_t（用于计算总资产）        shape:(历史时间T, n_asset+1, )
             资产分配比例W_t（用于计算action）      shape:(历史时间T, n_asset+1, )
-            预测股价的step by step历史Prd_t       shape:(股票池宽度N, 预测历史时间T', 预测长度pred_len)
-            预测方差（转化为风险系数）Var_t        shape:(股票池宽度N, 预测历史时间T', 1)
 
         action space：
             Dict{
@@ -28,10 +28,11 @@ class Portfolio_Prediction_Env(gym.Env):
 
         observation space：
             对应于data source的全部数据，以窗口化形式迭代，shape:(reshape(data_source), obs_window_length)：
+            （实际上，只需要对n_asset预测即可，通过配置确定从池中选择哪些股票进行投资）
                 Dict{
-                    Quote: Box(shape=(股票池宽度N, obs_window_length, 行情列数quote_col_num)),
-                    Pred_price:Box(shape=(股票池宽度N, 预测长度pred_len)),
-                    Pred_var:Box(shape=(股票池宽度N, )),
+                    Quote: Box(shape=(n_asset, obs_window_length, 行情列数quote_col_num)),
+                    Pred_price:Box(shape=(n_asset, 预测长度pred_len)),
+                    Pred_var:Box(shape=(n_asset, )),
                     Portfolio_price：Box(shape=(obs_window_length, n_asset+1, )),
                     Portfolio_volumns:Box(shape=(obs_window_length, n_asset+1, )),
                     Portfolio_weight:Box(shape=(obs_window_length, n_asset+1, )),

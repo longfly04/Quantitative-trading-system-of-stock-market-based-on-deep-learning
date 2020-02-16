@@ -25,7 +25,7 @@
 		"validation_pct":0.1,
 		"predict_type":"pct",
 		"pct_scale":100,
-		"norm_type":"global",
+		"norm_type":"window",
 		"norm_algo":"pca"
 	},
 	"training":{

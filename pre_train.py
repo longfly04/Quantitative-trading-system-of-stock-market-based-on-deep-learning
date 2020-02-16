@@ -3,8 +3,8 @@ import json
 
 from sklearn.preprocessing import StandardScaler
 
-from model.baseline import *
-from utils.data_process import *
+from model.baseline import LSTM_Model
+from utils.data_process import DataProcessor, DataVisualiser
 from utils.base.baseobj import *
 
 def main():
@@ -14,7 +14,9 @@ def main():
     # 获取历史数据，如果股票信息为列表，则获取列表
     stock_his = StockHistory(config)
     # 定义数据处理器
-    data_pro = DataProcessor(config)
+    data_pro = DataProcessor(date_col=config['data']['date_col'],
+                             daily_quotes=config['data']['daily_quotes'],
+                             target_col=config['data']['target_col'])
     # 对时间进行编码
     (date_list, embeddings_list) = data_pro.encode_date_embeddings(stock_his.stock_calender)
     
@@ -69,7 +71,9 @@ def main():
         # 拼接特征
         x = np.concatenate([daily_quotes.values, embeddings_list, daily_features.values], axis=1)
         # 定义训练、测试、验证、强化学习数据集范围
-        date_range_dict = data_pro.split_train_test_date(date_price_index)
+        date_range_dict = data_pro.split_train_test_date(date_price_index=date_price_index,
+                                                         train_pct=config['preprocess']['train_pct'],
+                                                         validation_pct=config['preprocess']['validation_pct'])
         # 训练数据生成
         train_gen = data_pro.batch_data_generator(x, y, date_price_index, date_range_dict, 'train')
         val_gen = data_pro.batch_data_generator(x, y, date_price_index, date_range_dict, 'validation')

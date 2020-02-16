@@ -37,6 +37,8 @@ import json
 from utils.data_manage import StockManager, PortfolioManager, DataDownloader
 from utils.data_process import DataProcessor
 from utils.order_process import OrderProcessor, TradeSimulator
+from utils.data_process import DataProcessor
+
 
 def prepare_train(config=None, download=False):
     """
@@ -67,16 +69,32 @@ def prepare_train(config=None, download=False):
     all_quote = stock_mgr.get_quote()
     calender = stock_mgr.get_trade_calender()
 
-    # 初始化资产管理器，更新资产
-    
-    pass
+    return calender, history, all_quote
 
 
-
-def train_forecasting():
+def train_forecasting(config=None, save=False, calender, history):
     """
     训练预测模型
     """
+    data_pro = DataProcessor(date_col=config['data']['date_col'],
+                             daily_quotes=config['data']['daily_quotes'],
+                             target_col=config['data']['target_col'])
+    stock_list = config['data']['stock_code']
+    assert len(stock_code) == len(history)
+    # 对时间进行编码
+    date_list, embeddings_list = data_pro.encode_date_embeddings(calender)
+    # 对投资标的的历史数据进行建模
+    for idx, data in zip(stock_list, history):
+        # 计算技术指标
+        data_tec = data_pro.cal_technical_indicators(data, date_index=date_list)
+        # 计算傅里叶变换
+        data_fft = data_pro.cal_fft(data, plot=True, save=True)
+        # 计算日行情
+        daily_quotes = data_pro.cal_daily_quotes(data)
+        # 分离其他特征
+        daily_other_features = data_pro.split_quote_and_others(data)
+
+
 
 def train_decision():
     """
@@ -97,7 +115,12 @@ def main():
     """"""
     with open('config.json', 'r', encoding='utf-8') as f:
         config = json.load(f)
-    prepare_train(config, download=True)
+    # 准备交易行情和日历
+    calender, history, all_quote = prepare_train(config, download=False)
+    # 训练预测模型，得到预测向量和风险向量
+    predict_price = train_forecasting(config, calender=calender, history=history)
+    # 训练决策模型，初始化资金，得到
+
 
 
     print("A lot of work to do ...")

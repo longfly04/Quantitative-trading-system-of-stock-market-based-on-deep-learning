@@ -145,7 +145,7 @@ class StockManager(object):
 
     def global_preprocess(self, ):
         """
-        对整个股票数据进行预处理
+        对整个股票数据进行预处理，时间唯一性、列去重、填充空值(使用0.001填充空值，防止出现无穷)
         """
         processed_list = []
         assert self.trade_calender is not None
@@ -166,10 +166,10 @@ class StockManager(object):
                 print("Data drop duplications at %d rows." %
                       (data.shape[0] - data_.shape[0]))
 
-            # 处理空值
+            # 处理空值和重复列
             data = data_.T.drop_duplicates(keep='first').T
             data.fillna(axis=0, method='ffill', inplace=True)
-            data.fillna(0, inplace=True)
+            data.fillna(0.001, inplace=True)
             processed_list.append(data)
 
         self.stock_data_list = processed_list
@@ -202,17 +202,23 @@ class StockManager(object):
         """
         获取全部股票池行情，传递给Portfoliomanager
         """
-        quote_columns = self.quote_col
+        quote_columns = self.quote_col[1:]
+        quote_index = self.quote_col[0]
         quote_list = []
-
         assert len(self.stock_pool) == len(self.stock_data_list)
+        '''
+        # 行情数据延展为二维拼接
         for i in range(len(self.stock_data_list)):
             data_quote = self.stock_data_list[i][quote_columns]
             data_quote = data_quote.rename(columns=lambda x: x + '_' + self.stock_pool[i])
             quote_list.append(data_quote)
 
         total_quote = pd.concat(quote_list, axis=1, join='outer', ignore_index=False)
-
+        '''
+        for i in range(len(self.stock_data_list)):
+            data_quote = self.stock_data_list[i][quote_columns].values
+            quote_list.append(data_quote)
+        total_quote = np.array(quote_list)
         print('Total quote shape is ', total_quote.shape )
         return total_quote
 

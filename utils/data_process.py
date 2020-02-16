@@ -26,12 +26,38 @@ class DataProcessor():
     时序数据处理器，对日线数据和分钟数据进行预处理
     """
 
-    def __init__(self, config):
-        self.cfg = config
-        self.data_cfg = config['data']
-        self.pre_cfg = config["preprocess"]
-        self.train_cfg = config['training']
-        self.predict_cfg = config['prediction']
+    def __init__(self,
+                 date_col,
+                 daily_quotes,
+                 target_col,
+                 pct_scale=100,
+                 predict_len=5,
+                 predict_type='pct',
+                 window_len=55,
+                 norm_type='global',
+                 predict_steps=5
+                ):
+        """
+            参数：
+                date_col：日期列
+                daily_quotes：每日行情列
+                target_col：预测标签列
+                pct_scale:缩放比例
+                predict_len:预测未来长度
+                predict_type:预测方式： real真值，diff差值，pct比值
+                window_len:特征窗口长度
+                norm_type:标准化方式：global全局标准化，window窗口标准化
+                predict_steps:预测步数，与预测长度不同，相当于预测多少个“predict_len”
+        """
+        self.date_col = date_col
+        self.daily_quotes = daily_quotes
+        self.target_col = target_col
+        self.pct_scale = pct_scale
+        self.predict_len = predict_len
+        self.predict_type = predict_type
+        self.window_len = window_len
+        self.predict_steps = predict_steps
+        self.norm_type = norm_type
 
     def _choose_color(self, num=1):
         """
@@ -205,7 +231,7 @@ class DataProcessor():
         """
         数据集验证，主要是检查并剔除不符合交易日calendar的数据以及重复数据
         """
-        date_col = self.data_cfg['date_col']
+        date_col = self.date_col
         history = pd.DataFrame(history_calendar, columns=[
                                date_col], dtype='int64')
         assert pd.unique(history[date_col]).shape[0] == history.shape[0]
@@ -674,7 +700,7 @@ class DataProcessor():
             date_list = pd.to_datetime(timeseries, format='%Y%m%d').to_list()
             date_list = [arrow.get(t) for t in date_list]
         else:
-            date_list = [arrow.get(timeseries)]
+            date_list = [arrow.get(timeseries, 'YYYYMMDD')]
 
         embedding_list = []
         for dt in date_list:
@@ -725,10 +751,10 @@ class DataProcessor():
         输出：
             拼接为(real_price, diff_price, pct_price, other quotes...)的Dataframe
         """
-        daily_quotes = self.data_cfg['daily_quotes']
-        target_col = self.data_cfg['target']
+        daily_quotes = self.daily_quotes
+        target_col = self.target_col
         # 在选择pct模式下的缩放尺度
-        pct_scale = self.pre_cfg['pct_scale']
+        pct_scale = self.pct_scale
         price_col = daily_quotes[1:6]
         price_col.pop(3)
         volumn_col = daily_quotes[-2:]
@@ -783,7 +809,7 @@ class DataProcessor():
             real price
         """
         # 在选择pct模式下的缩放尺度
-        pct_scale = self.pre_cfg['pct_scale']
+        pct_scale = self.pct_scale
         output = np.array(output).reshape((-1,))
 
         if isinstance(current_date, str):
@@ -793,16 +819,16 @@ class DataProcessor():
             current_price = date_price_index['price'].loc[current_date]
         # 预测未知
         if unknown:
-            assert self.pre_cfg['predict_len'] == len(output)
+            assert self.predict_len == len(output)
         else:
-            assert self.pre_cfg['predict_len'] * \
-            self.predict_cfg['predict_steps'] == len(output)
+            assert self.predict_len * \
+            self.predict_steps == len(output)
 
         current_price = float(current_price)
-        if self.pre_cfg['predict_type'] == 'real':
+        if self.predict_type == 'real':
             # 真值
             ret = output
-        elif self.pre_cfg['predict_type'] == 'diff':
+        elif self.predict_type == 'diff':
             # 差值
             true_value = current_price
             sum_list = []
@@ -811,7 +837,7 @@ class DataProcessor():
                 sum_i = sum_i + output[i]
                 sum_list.append(sum_i)
             ret = sum_list
-        elif self.pre_cfg['predict_type'] == 'pct':
+        elif self.predict_type == 'pct':
             # 比值
             true_value = current_price
             multi_list = []
@@ -822,9 +848,23 @@ class DataProcessor():
             ret = multi_list
         else:
             raise ValueError(
-                "Please check the config file in \'predict_type\' %s" % self.pre_cfg['predict_type'])
+                "Please check the config file in \'predict_type\' %s" % self.predict_type)
 
         return ret
+
+    @info
+    def split_quote_and_others(self, data):
+        """
+        将行情信息和其他信息分开，并移除日期列，用于降维
+        """
+        other_features_col = [x for x in data.columns.values if x not in self.daily_quotes]
+        # 删除自动索引列和日期列
+        del_col = [x for x in other_features_col if x.endswith('date')]
+        del_col = ['Unnamed: 0'] + del_col
+        for d in del_col:
+            other_features_col.remove(d)
+
+        return data[other_features_col]
 
     @info
     def concat_features(self, data_list, pca_comp=0.99):
@@ -855,53 +895,45 @@ class DataProcessor():
             return full_data_
 
     @info
-    def split_train_test_date(self, date_price_index):
+    def split_train_test_date(self, 
+                              date_price_index,
+                              training_pct=0.98,
+                              validation_pct=0.1,
+                              ):
         """
-        将日期序列按照配置文件的比例关系划分训练集、验证集、测试集和强化训练集
-
-        训练顺序：
-            env model：     训练集  验证集  测试集
-            reinforce model：   强化训练集  测试集
+        将日期序列按照配置文件的比例关系划分训练集、验证集、测试集
 
         输出：
-            dict keys：training, validation, reinforcement
+            dict keys：training, validation,
         """
-        training_pct = self.pre_cfg["training_pct"]
-        reinforcement_pct = self.pre_cfg["reinforcement_pct"]
-        predict_pct = self.pre_cfg["predict_pct"]
-        validation_pct = self.pre_cfg["validation_pct"]
-        window_len = self.pre_cfg['window_len']
-        predict_len = self.pre_cfg['predict_len']
+        predict_pct = 1 - training_pct
+        window_len = self.window_len
+        predict_len = self.predict_len
 
         data_length = date_price_index.shape[0] - window_len - predict_len
         training_length = int(data_length * training_pct)
-        reinforcement_length = int(data_length * reinforcement_pct)
         validation_length = int(training_length * validation_pct)
         predict_length = data_length - training_length
 
         training_date_range = date_price_index.iloc[:training_length]
-        reinforcement_date_range = training_date_range[-reinforcement_length:]
         validation_date = training_date_range.sample(n=validation_length)
         predict_date = date_price_index.iloc[training_length:-
                                              window_len - predict_len]
 
         date_range_dict = dict([('train', training_date_range.index.values),
                                 ('validation', validation_date.index.values),
-                                ('reinforcement',
-                                 reinforcement_date_range.index.values),
                                 ('predict', predict_date.index.values)])
 
         return date_range_dict
 
-    def batch_data_generator(self, X, Y, date_price_index, date_range_dict, gen_type='train'):
+    def batch_data_generator(self, X, Y, date_price_index, date_range_dict, gen_type='train', batch_size=32):
         """
         批数据生成器，产生训练数据和验证集数据，以批为单位
 
         输出：
             generator X:[]
         """
-        batch_size = self.train_cfg['batch_size']
-        predict_len = self.pre_cfg['predict_len']
+        predict_len = self.predict_len
 
         assert X.shape[0] == Y.shape[0] == date_price_index.shape[0]
 
@@ -933,9 +965,9 @@ class DataProcessor():
         """
         待预测数据
         """
-        window_len = self.pre_cfg['window_len']
-        predict_len = self.pre_cfg['predict_len']
-        predict_steps = self.predict_cfg['predict_steps']
+        window_len = self.window_len
+        predict_len = self.predict_len
+        predict_steps = self.predict_steps
 
         predict_data = []
         for idx in range(0, len(predict_date_range), predict_len):
@@ -955,8 +987,8 @@ class DataProcessor():
         输入：
             X,Y 日期列表，当前窗口起始时间
         """
-        window_len = self.pre_cfg['window_len']
-        predict_len = self.pre_cfg['predict_len']
+        window_len = self.window_len
+        predict_len = self.predict_len
 
         assert X.shape[0] == date_price_index.shape[0]
 
@@ -969,7 +1001,7 @@ class DataProcessor():
             x = X[start_idx: x_end_idx]
         except Exception as e:
             print(e)
-        if self.pre_cfg['norm_type'] == 'window':
+        if self.norm_type == 'window':
             # 在每个数据窗口内进行标准化
             ss = StandardScaler()
             x = ss.fit_transform(x)

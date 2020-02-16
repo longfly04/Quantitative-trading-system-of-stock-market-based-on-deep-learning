@@ -17,7 +17,7 @@ from keras.layers import *
 from keras import Model
 from keras.models import Sequential, load_model
 from keras.callbacks import Callback, EarlyStopping, ModelCheckpoint, TensorBoard
-from sklearn.metrics import r2_score,
+from sklearn.metrics import r2_score
 
 from utils.tools import *
 
@@ -110,8 +110,8 @@ class LSTM_Model(Model):
         callbacks = [
             EarlyStopping(monitor='val_loss', patience=3),
             ModelCheckpoint(filepath=save_fname, monitor='val_loss', save_best_only=True),
-            TensorBoard(log_dir=self.train_cfg['tensorboard_dir'],
-        ]
+            TensorBoard(log_dir=self.train_cfg['tensorboard_dir']),
+            ]
 
         x = x[x.shape[0]%self.train_cfg['batch_size']:]
         y = y[y.shape[0]%self.train_cfg['batch_size']:]
@@ -141,9 +141,8 @@ class LSTM_Model(Model):
         callbacks = [
             # EarlyStopping(monitor='val_loss', patience=2),
             # ModelCheckpoint(filepath=save_fname, monitor='val_loss', save_best_only=True),
-            TensorBoard(log_dir=self.train_cfg['tensorboard_dir'],
-            
-        ]
+            TensorBoard(log_dir=self.train_cfg['tensorboard_dir']),
+            ]
 
         self.history = self.model.fit_generator(
                                                 xy_gen,
