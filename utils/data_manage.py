@@ -1,6 +1,7 @@
 import numpy as np 
 import pandas as pd 
 import datetime
+import arrow
 import os
 from vnpy.trader.constant import *
 from vnpy.trader.object import *
@@ -13,7 +14,7 @@ class DataDownloader(object):
     """
     数据下载器，包含完整下载和增量下载，数据输出至本地数据库
     """
-    def __init__(self, data_path, stock_list_file:str, download_mode:str, start_date:str, date_col):
+    def __init__(self, data_path, stock_list_file:str,):
         """
         参数：
             data_path：存放数据路径
@@ -22,15 +23,15 @@ class DataDownloader(object):
         """
         self.data_path = data_path
         self.stock_list_file = stock_list_file
-        self.download_mode = download_mode
-        self.start_date = start_date
-        self.date_col = date_col
+        self.current_date = datetime.strftime(datetime.now(), format="%Y%m%d")
 
-    def download_stock(self, date:str):
+    def download_stock(self, download_mode:str, start_date:str, date_col):
         """
         更新股票池中的记录（截止最新）
         """
-        current_date = datetime.strftime(datetime.now.date(), format="%Y%M%D")
+        self.download_mode = download_mode
+        self.start_date = start_date
+        self.date_col = date_col
 
         with open(self.stock_list_file, encoding='UTF-8') as f:
             stock_dict = {}
@@ -46,27 +47,38 @@ class DataDownloader(object):
                 # md = MinuteDownloader(start_date='20190101', end_date='20191231', stock_code=str(v))
                 # minutes_data = md.downloadMinutes(save=False)
                 dd = DailyDownloader(start_date=self.start_date, 
-                                     end_date=current_date, 
+                                     end_date=self.current_date, 
                                      stock_code=str(v), 
                                      save_dir=self.data_path
                                      )
                 daily_data = dd.downloadDaily(save=True)
-                print('Complete %s total downloading from %s to %s.' %(k, self.start_date, current_date))
+                print('Complete %s %s total downloading from %s to %s.' %(k, v, self.start_date, self.current_date))
 
         elif self.download_mode == 'additional':
             # 增量下载，可以提高速度
             for k,v in stock_dict.items():
                 try:
                     path_ = search_file(self.data_path, v)
-                    old_data = pd.read_csv(path_[0])
-                    old_cal_date = old_data[self.date_col].value()
-                    dd = DailyDownloader(start_date=old_cal_date, 
-                                         end_date=current_date, 
-                                         stock_code=str(v),
-                                        )
-                    additional_data = dd.downloadDaily(save=False)
-                    additional_data.to_csv(path_[0], mode='a+', header=False)
-                    print('Complete %s additional downloading from %s to %s.' %(k, old_cal_date, current_date))
+                    if len(path_) == 0:
+                        # 文件夹中不含有这个文件 则启动对这个文件的全量下载
+                        dd = DailyDownloader(start_date=self.start_date, 
+                                     end_date=self.current_date, 
+                                     stock_code=str(v), 
+                                     save_dir=self.data_path
+                                     )
+                        daily_data = dd.downloadDaily(save=True)
+                        print('Complete %s %s total downloading from %s to %s.' %(k, v, self.start_date, self.current_date))
+                    else:
+                        old_data = pd.read_csv(path_[0])
+                        old_cal_date = str(old_data[self.date_col].iloc[-1])
+                        new_start = arrow.get(old_cal_date, 'YYYYMMDD').shift(days=1).format('YYYYMMDD')
+                        dd = DailyDownloader(start_date=new_start, 
+                                             end_date=self.current_date, 
+                                             stock_code=str(v),
+                                            )
+                        additional_data = dd.downloadDaily(save=False)
+                        additional_data.to_csv(path_[0], mode='a+', header=False, index=True)
+                        print('Complete %s %s additional downloading from %s to %s.' %(k, v, old_cal_date, self.current_date))
                 except Exception as e:
                     print(e)
 
@@ -75,20 +87,17 @@ class DataDownloader(object):
         从经纪人获取账户最新资产情况，存入本地文件
         """
 
-    def get_calender(self,):
+    def get_calender(self, start_date=None):
         """
         下载最新的交易日历
         """
-        current_date = datetime.strftime(datetime.now.date(), format="%Y%M%D")
-        start_date = self.start_date
-        end_date = current_date
-        assert isinstance(self.stock_code_list, list)
+        end_date = self.current_date
 
-        st_code = self.stock_code_list[0]
+        st_code = '600000'
         para = Parameters(ts_code=st_code, start_date=start_date, end_date=end_date)
         stockdata = StockData(para=para)
         stock_calender = stockdata.getTradeCalender()
-        self.calender = pd.to_datetime(stock_calender['cal_date']).unique()
+        self.calender = [arrow.get(i, 'YYYYMMDD') for i in stock_calender['cal_date'].unique()]
 
         return self.calender
 
@@ -144,10 +153,9 @@ class StockManager(object):
         for data in self.stock_data_list:
             # 验证时间索引唯一性
             date_col = self.date_col
-            history = pd.DataFrame(self.trade_calender, columns=[
+            history = pd.DataFrame([i.format('YYYYMMDD') for i in self.trade_calender], columns=[
                                    date_col], dtype='int64')
             assert pd.unique(history[date_col]).shape[0] == history.shape[0]
-            self.trade_calender = history
 
             if data[date_col].is_unique:
                 data_ = data
@@ -159,10 +167,9 @@ class StockManager(object):
                       (data.shape[0] - data_.shape[0]))
 
             # 处理空值
-            data = data_
-            data = data.T.drop_duplicates(keep='first').T
-            data = data.fillna(axis=0, method='ffill', inplace=True)
-            data = data.fillna(0, inplace=True)
+            data = data_.T.drop_duplicates(keep='first').T
+            data.fillna(axis=0, method='ffill', inplace=True)
+            data.fillna(0, inplace=True)
             processed_list.append(data)
 
         self.stock_data_list = processed_list
@@ -173,6 +180,8 @@ class StockManager(object):
         获取股票数据
         """
         if self.preprocessed:
+            for data in self.stock_data_list:
+                print('History data shape is ' , data.shape)
             return self.stock_data_list
         else:
             print("Please preprocess the data list firstly.")
@@ -183,7 +192,8 @@ class StockManager(object):
         获取交易日历
         """
         if self.preprocessed:
-            return self.trade_calender
+            print('Calender length is ', len(self.trade_calender))
+            return [i.format('YYYYMMDD') for i in self.trade_calender]
         else:
             print("Please preprocess the data list firstly.")
             return None
@@ -198,21 +208,23 @@ class StockManager(object):
         assert len(self.stock_pool) == len(self.stock_data_list)
         for i in range(len(self.stock_data_list)):
             data_quote = self.stock_data_list[i][quote_columns]
-            data_quote = data_quote.rename(lambda x: x+self.stock_pool[i])
+            data_quote = data_quote.rename(columns=lambda x: x + '_' + self.stock_pool[i])
             quote_list.append(data_quote)
 
         total_quote = pd.concat(quote_list, axis=1, join='outer', ignore_index=False)
 
+        print('Total quote shape is ', total_quote.shape )
         return total_quote
 
 
 class PortfolioManager(object):
     """
-    资产管理器，提供Gym环境的资产向量
+    资产管理器，提供Gym环境的资产向量，回测情况下，通过行情历史计算，实盘情况下，通过交易接口获取账户信息
     """
     def __init__(self, config):
         self.data_cfg = config['data']
         self.quote_columns = self.data_cfg['daily_quotes'] # 行情数据列，传递给Env
+        self.stock_list = self.data_cfg['stock_code'] # 从股票池中选择进行投资的股票
 
     def _step(self,):
         """"""
@@ -220,10 +232,20 @@ class PortfolioManager(object):
     def _reset(self,):
         """"""
 
-    def load_portfolio(self,):
+    def load_quote(self, total_quote=None, calender=None, history_data=None,):
         """
-        从本地数据文件获取最新的资产情况
+        从本地数据文件获取最新的股票行情
         """
+        # 从data manager获得的历史数据、交易日历和行情数据
+        self.total_quote = total_quote
+        self.calender = calender
+        self.history_data = history_data
+
+    def load_trade(self,):
+        """
+        获取成交的订单情况，并更新资产
+        """
+
 
 def search_file(path=None, filename=None):
     """

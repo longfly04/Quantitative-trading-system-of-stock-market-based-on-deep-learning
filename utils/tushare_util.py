@@ -47,15 +47,25 @@ class DailyDownloader():
             stock_code = stock_code + '.SH'
         assert stock_code[-3:] == '.SH'
 
-        self.start_date = dt.datetime.strptime(start_date, '%Y%m%d')
-        self.end_date = dt.datetime.strptime(end_date, '%Y%m%d')
+        self.start_date = arrow.get(start_date, 'YYYYMMDD')
+        self.end_date = arrow.get(end_date, 'YYYYMMDD')
         self.stock_code = stock_code
         self.save_dir = save_dir
         self.paralist = []
-        for i in range(self.start_date.year, self.end_date.year + 1):
+
+        for inter in arrow.Arrow.interval('year', self.start_date, self.end_date, 1):
+            if inter[0] < self.start_date :
+                inter_1 = self.start_date
+            else:
+                inter_1 = inter[0]
+            if inter[1] > self.end_date :
+                inter_2 = self.end_date
+            else:
+                inter_2 = inter[1]
             para = Parameters(ts_code=self.stock_code,
-                              start_date=str(i)+'0101',
-                              end_date=str(i)+'1231')
+                              start_date=str(inter_1.format('YYYYMMDD')),
+                              end_date=str(inter_2.format('YYYYMMDD'))
+                              )
             self.paralist.append(para)
 
     @info
@@ -75,26 +85,29 @@ class DailyDownloader():
                 columns='ts_code').rename(columns=lambda x: 'daily_indicator_'+x)
             moneyflow = stockdata.getMoneyflow().drop(
                 columns='ts_code').rename(columns=lambda x: 'moneyflow_'+x)
+            
+            try:
+                daily_total = pd.merge(
+                    pd.merge(
+                        pd.merge(cal, daily, left_on='cal_date',
+                                 right_on='daily_trade_date', how='left'),
+                        daily_indicator, left_on='cal_date', right_on='daily_indicator_trade_date', how='left'),
+                    moneyflow, left_on='cal_date', right_on='moneyflow_trade_date', how='left')
+                # 整合个股每日行情、资金信息
+                res_qfq = stockdata.getRestoration(adj='qfq').drop(
+                    columns='ts_code').rename(columns=lambda x: 'res_qfq_'+x)
+                res_hfq = stockdata.getRestoration(adj='hfq').drop(
+                    columns='ts_code').rename(columns=lambda x: 'res_hfq_'+x)
 
-            daily_total = pd.merge(
-                pd.merge(
-                    pd.merge(cal, daily, left_on='cal_date',
-                             right_on='daily_trade_date', how='left'),
-                    daily_indicator, left_on='cal_date', right_on='daily_indicator_trade_date', how='left'),
-                moneyflow, left_on='cal_date', right_on='moneyflow_trade_date', how='left')
-            # 整合个股每日行情、资金信息
-            res_qfq = stockdata.getRestoration(adj='qfq').drop(
-                columns='ts_code').rename(columns=lambda x: 'res_qfq_'+x)
-            res_hfq = stockdata.getRestoration(adj='hfq').drop(
-                columns='ts_code').rename(columns=lambda x: 'res_hfq_'+x)
-
-            restoration = pd.merge(
-                res_hfq, res_qfq, left_on='res_hfq_trade_date', right_on='res_qfq_trade_date')
-            # 整合复权信息
-            df = pd.merge(daily_total, restoration, left_on='cal_date',
-                          right_on='res_hfq_trade_date', how='left')
-            total = total.append(df.sort_values(
-                by='cal_date', ascending=True), ignore_index=True)
+                restoration = pd.merge(
+                    res_hfq, res_qfq, left_on='res_hfq_trade_date', right_on='res_qfq_trade_date')
+                # 整合复权信息
+                df = pd.merge(daily_total, restoration, left_on='cal_date',
+                              right_on='res_hfq_trade_date', how='left')
+                total = total.append(df.sort_values(
+                    by='cal_date', ascending=True), ignore_index=True)
+            except Exception as e:
+                print(e)
         print('Get {0} stock market data at {1} dimentions and {2} rows.'.format(
             self.stock_code, total.shape[1], total.shape[0]))
         if save:
@@ -127,23 +140,26 @@ class DailyDownloader():
             financeindicator = stockfinance.getFinacialIndicator().drop(
                 columns='ts_code').rename(columns=lambda x: 'financeindicator_'+x)
 
-            finance_total = pd.merge(
-                cal, income, left_on='cal_date', right_on='income_ann_date', how='left')
-            finance_total = pd.merge(finance_total, financeindicator, left_on='cal_date',
-                                     right_on='financeindicator_ann_date', how='left')
-            finance_total = pd.merge(
-                finance_total, balancesheet, left_on='cal_date', right_on='balancesheet_ann_date', how='left')
-            finance_total = pd.merge(
-                finance_total, cashflow, left_on='cal_date', right_on='cashflow_ann_date', how='left')
-            finance_total = pd.merge(
-                finance_total, forecast, left_on='cal_date', right_on='forecast_ann_date', how='left')
-            finance_total = pd.merge(
-                finance_total, express, left_on='cal_date', right_on='express_ann_date', how='left')
-            finance_total = pd.merge(
-                finance_total, dividend, left_on='cal_date', right_on='dividend_ann_date', how='left')
+            try:
+                finance_total = pd.merge(
+                    cal, income, left_on='cal_date', right_on='income_ann_date', how='left')
+                finance_total = pd.merge(finance_total, financeindicator, left_on='cal_date',
+                                         right_on='financeindicator_ann_date', how='left')
+                finance_total = pd.merge(
+                    finance_total, balancesheet, left_on='cal_date', right_on='balancesheet_ann_date', how='left')
+                finance_total = pd.merge(
+                    finance_total, cashflow, left_on='cal_date', right_on='cashflow_ann_date', how='left')
+                finance_total = pd.merge(
+                    finance_total, forecast, left_on='cal_date', right_on='forecast_ann_date', how='left')
+                finance_total = pd.merge(
+                    finance_total, express, left_on='cal_date', right_on='express_ann_date', how='left')
+                finance_total = pd.merge(
+                    finance_total, dividend, left_on='cal_date', right_on='dividend_ann_date', how='left')
 
-            total = total.append(finance_total.sort_values(
-                by='cal_date', ascending=True), ignore_index=True)
+                total = total.append(finance_total.sort_values(
+                    by='cal_date', ascending=True), ignore_index=True)
+            except Exception as e:
+                print(e)
         print('Get {0} stock finance data at {1} dimentions and {2} rows.'.format(
             self.stock_code, total.shape[1], total.shape[0]))
         if save:
@@ -188,17 +204,19 @@ class DailyDownloader():
                 block = block.groupby('block_trade_date').sum().reset_index()
 
             # 为限售解禁和大宗交易添加两列数据 便于接下来合并数据
-
-            market_total = cal.merge(HSGTflow,
-                                     left_on='cal_date', right_on='HSGTflow_trade_date', how='left').merge(margin,
-                                                                                                           left_on='cal_date', right_on='margin_trade_date', how='left').merge(pledge,
-                                                                                                                                                                               left_on='cal_date', right_on='pledge_end_date', how='left').merge(repurchase,
-                                                                                                                                                                                                                                                 left_on='cal_date', right_on='repurchase_ann_date', how='left').merge(desterilization,
-                                                                                                                                                                                                                                                                                                                       left_on='cal_date', right_on='desterilization_ann_date', how='left').merge(block,
-                                                                                                                                                                                                                                                                                                                                                                                                  left_on='cal_date', right_on='block_trade_date', how='left')
-            # print(market_total)
-            total = total.append(market_total.sort_values(
-                by='cal_date', ascending=True), ignore_index=True)
+            try:
+                market_total = cal.merge(HSGTflow,
+                                         left_on='cal_date', right_on='HSGTflow_trade_date', how='left').merge(margin,
+                                                                                                               left_on='cal_date', right_on='margin_trade_date', how='left').merge(pledge,
+                                                                                                                                                                                   left_on='cal_date', right_on='pledge_end_date', how='left').merge(repurchase,
+                                                                                                                                                                                                                                                     left_on='cal_date', right_on='repurchase_ann_date', how='left').merge(desterilization,
+                                                                                                                                                                                                                                                                                                                           left_on='cal_date', right_on='desterilization_ann_date', how='left').merge(block,
+                                                                                                                                                                                                                                                                                                                                                                                                      left_on='cal_date', right_on='block_trade_date', how='left')
+                # print(market_total)
+                total = total.append(market_total.sort_values(
+                    by='cal_date', ascending=True), ignore_index=True)
+            except Exception as e:
+                print(e)
         print('Get {0} daily market data at {1} dimentions and {2} rows.'.format(
             self.stock_code, total.shape[1], total.shape[0]))
         if save:
@@ -229,16 +247,19 @@ class DailyDownloader():
             hibor = interest.getHibor().rename(columns=lambda x: 'hibor_'+x)
             wen = interest.getWenZhouIndex().rename(columns=lambda x: 'wen_'+x)
 
-            interest_total = cal.merge(shibor,
-                                       left_on='cal_date', right_on='shibor_date', how='left').merge(shiborquote,
-                                                                                                     left_on='cal_date', right_on='shiborquote_date', how='left').merge(shiborLPR,
-                                                                                                                                                                        left_on='cal_date', right_on='shiborLPR_date', how='left').merge(libor,
-                                                                                                                                                                                                                                         left_on='cal_date', right_on='libor_date', how='left').merge(hibor,
-                                                                                                                                                                                                                                                                                                      left_on='cal_date', right_on='hibor_date', how='left').merge(wen,
-                                                                                                                                                                                                                                                                                                                                                                   left_on='cal_date', right_on='wen_date', how='left')
-            # print(market_total)
-            total = total.append(interest_total.sort_values(
-                by='cal_date', ascending=True), ignore_index=True)
+            try:
+                interest_total = cal.merge(shibor,
+                                           left_on='cal_date', right_on='shibor_date', how='left').merge(shiborquote,
+                                                                                                         left_on='cal_date', right_on='shiborquote_date', how='left').merge(shiborLPR,
+                                                                                                                                                                            left_on='cal_date', right_on='shiborLPR_date', how='left').merge(libor,
+                                                                                                                                                                                                                                             left_on='cal_date', right_on='libor_date', how='left').merge(hibor,
+                                                                                                                                                                                                                                                                                                          left_on='cal_date', right_on='hibor_date', how='left').merge(wen,
+                                                                                                                                                                                                                                                                                                                                                                       left_on='cal_date', right_on='wen_date', how='left')
+                # print(market_total)
+                total = total.append(interest_total.sort_values(
+                    by='cal_date', ascending=True), ignore_index=True)
+            except Exception as e:
+                print(e)
         print('Get {0} interest data at {1} dimentions and {2} rows.'.format(
             self.stock_code, total.shape[1], total.shape[0]))
         if save:
@@ -251,13 +272,16 @@ class DailyDownloader():
         finance_total = self.getDailyFinance()
         market_total = self.getDailyMarket()
         interest_total = self.getDailyInterest()
-
-        total = stock_total.merge(finance_total,
-                                  on='cal_date', how='left').merge(market_total,
-                                                                   on='cal_date', how='left').merge(interest_total,
-                                                                                                    on='cal_date', how='left')
+        total = pd.DataFrame()
+        try:
+            total = stock_total.merge(finance_total,
+                                      on='cal_date', how='left').merge(market_total,
+                                                                       on='cal_date', how='left').merge(interest_total,
+                                                                                                        on='cal_date', how='left')
+        except Exception as e:
+            print(e)
         print('[Download] Get {0} daily total data at {1} dimentions and {2} rows.'.format(
-            self.stock_code, total.shape[1], total.shape[0]))
+                self.stock_code, total.shape[1], total.shape[0]))
         if save:
             total.to_csv(self.save_dir + '\\daily_total_' + self.stock_code[:-3]+'.csv')
         return total

@@ -36,8 +36,8 @@ class Logger():
 
     def get_logger(self, ):
      # 获取logger实例，如果参数为空则返回root logger
-        logger = logging.getLogger("quant")
-        if not logger.handlers:
+        self.logger = logging.getLogger("quant")
+        if not self.logger.handlers:
             # 指定logger输出格式
             formatter = logging.Formatter('%(asctime)s %(levelname)-8s: %(message)s')
  
@@ -50,13 +50,13 @@ class Logger():
             console_handler.formatter = formatter  # 也可以直接给formatter赋值
  
             # 为logger添加的日志处理器
-            logger.addHandler(file_handler)
-            logger.addHandler(console_handler)
+            self.logger.addHandler(file_handler)
+            self.logger.addHandler(console_handler)
  
             # 指定日志的最低输出级别，默认为WARN级别
-            logger.setLevel(logging.INFO)
+            self.logger.setLevel(logging.INFO)
      #  添加下面一句，在记录日志之后移除句柄
-        return  logger
+        return  self.logger
 
 
 def info(func):
@@ -64,12 +64,12 @@ def info(func):
     def log(*args,**kwargs):
         logger = Logger()
         try:
-            logger.info("Method: \" {name} \" is starting...".format(name = func.__name__))
+            logger.get_logger().info("Method: \" {name} \" is starting...".format(name = func.__name__))
             timer = Timer(func.__name__)
             timer.start()
             result = func(*args,**kwargs)
             timer.stop()
-            logger.info("Method: \" {name} \" is completed .".format(name = func.__name__))
+            logger.get_logger().info("Method: \" {name} \" is completed .".format(name = func.__name__))
             return result
         except Exception as e:
             logger.get_logger().error(f"{func.__name__} is error,here are details:{traceback.format_exc()}")
