@@ -4,6 +4,7 @@ import sys,os
 import logging
 from functools import wraps
 import traceback
+import arrow
 
 class Timer():
     '''
@@ -74,5 +75,44 @@ def info(func):
         except Exception as e:
             logger.get_logger().error(f"{func.__name__} is error,here are details:{traceback.format_exc()}")
     return log
+
+
+
+def search_file(path=None, filename=None):
+    """
+    递归查询文件下包含指定字符串的文件
+    """
+    res = []
+    for item in os.listdir(path):
+        item_path = os.path.join(path, item)
+        if os.path.isdir(item_path):
+            search_file(item_path, filename)
+        elif os.path.isfile(item_path):
+            if filename in item_path:
+                res.append(item_path)
+    return res
+
+
+def parse_filename(filename:str):
+    """
+    解析文件名，并返回一个字典
+    """
+    f = filename.strip()
+    if f.endswith('.h5'):
+        f = f[:-3]
+        args = f.split('-')
+        assert len(args) == 7
+        args_dict = {
+            'train_date': arrow.get(args[0][-15:], 'YYYYMMDD_HHmmss'),
+            'loss': float(args[1]),
+            'val_loss': float(args[2]),
+            'acc': float(args[3]),
+            'val_acc': float(args[4]),
+            'stock': args[5],
+            'end_date':arrow.get(args[6], 'YYYYMMDD')
+        }
+        return args_dict
+    else:
+        return None
 
 

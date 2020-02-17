@@ -17,25 +17,9 @@ from keras.layers import *
 from keras import Model
 from keras.models import Sequential, load_model
 from keras.callbacks import Callback, EarlyStopping, ModelCheckpoint, TensorBoard
-from sklearn.metrics import r2_score
 
 from utils.tools import *
 
-
-class Metrics(Callback):
-    def on_train_begin(self, logs={}):
-        self.r2_score = []
-
-    def on_epoch_end(self, epoch, logs={}):
-        val_predict = (numpy.asarray(self.model.predict(
-            self.validation_data[0]))).round()
-        val_targ = self.validation_data[1]
-        _val_f1 = f1_score(val_targ, val_predict)
-        _val_recall = recall_score(val_targ, val_predict)
-        _val_precision = precision_score(val_targ, val_predict)
-        self.val_f1s.append(_val_f1)
-        self.val_recalls.append(_val_recall)
-        self.val_precisions.append(_val_precision)
 
 class LSTM_Model(Model):
     def __init__(self, config, name=None, **kwargs):
@@ -132,7 +116,7 @@ class LSTM_Model(Model):
         print('[Model] Training Completed.')
 
     @info
-    def train_model_generator(self, xy_gen, val_gen, save_model=True):
+    def train_model_generator(self, xy_gen, val_gen, save_model=True, end_date=None):
         '''
         使用迭代器输入数据。
         '''
@@ -158,11 +142,14 @@ class LSTM_Model(Model):
                 os.makedirs(self.train_cfg['save_model_path'])
             epoch_loss = self.history.history['loss'][-1]
             epoch_val_loss = self.history.history['val_loss'][-1]
-            loss_str = 'loss_' + str(epoch_loss)[:6] + '-val_loss_' + str(epoch_val_loss)[:6]
+            epoch_acc = self.history.history['acc'][-1]
+            epoch_val_acc = self.history.history['val_acc'][-1]
+            loss_str = str(epoch_loss)[:6] + str(epoch_val_loss)[:6]
+            acc_str = str(epoch_acc)[:6] + str(epoch_val_acc)[:6]
             stock_name = self.name
             save_fname = os.path.join(self.train_cfg['save_model_path'],
-                                 '%s-%s-%s.h5' % (dt.datetime.now().strftime('%Y%m%d-%H%M%S'),
-                                               loss_str, stock_name))
+                                 '%s-%s-%s-%s-%s.h5' % (dt.datetime.now().strftime('%Y%m%d_%H%M%S'),
+                                               loss_str, acc_str, stock_name, end_date))
             self.model.save(save_fname)
             print('[Saving] Model saved as %s' % save_fname)
         print('[Model] Generator Training Completed.')

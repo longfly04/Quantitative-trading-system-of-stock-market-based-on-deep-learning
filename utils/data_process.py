@@ -36,7 +36,8 @@ class DataProcessor():
                  predict_type='pct',
                  window_len=55,
                  norm_type='window',
-                 predict_steps=5
+                 predict_steps=5,
+                 pca_n_comp=100,
                 ):
         """
             参数：
@@ -49,6 +50,7 @@ class DataProcessor():
                 window_len:特征窗口长度
                 norm_type:标准化方式：global全局标准化，window窗口标准化
                 predict_steps:预测步数，与预测长度不同，相当于预测多少个“predict_len”
+                pca_n_comp:PCA降维的维度数
         """
         self.date_col = date_col
         self.daily_quotes = daily_quotes
@@ -59,6 +61,7 @@ class DataProcessor():
         self.window_len = window_len
         self.predict_steps = predict_steps
         self.norm_type = norm_type
+        self.pca_n_comp = pca_n_comp
 
     def _choose_color(self, num=1):
         """
@@ -931,6 +934,7 @@ class DataProcessor():
         predict_length = data_length - training_length
 
         training_date_range = date_price_index.iloc[:training_length]
+        # 验证集是在训练集中随机采样获得的
         validation_date = training_date_range.sample(n=validation_length)
         predict_date = date_price_index.iloc[training_length:-
                                              window_len]
@@ -940,6 +944,7 @@ class DataProcessor():
                                 ('predict', predict_date.index.values)])
 
         return date_range_dict
+
 
     def batch_data_generator(self, X, Y, date_price_index, date_range_dict, gen_type='train', batch_size=32):
         """
@@ -1016,6 +1021,10 @@ class DataProcessor():
             x = X[start_idx: x_end_idx]
         except Exception as e:
             print(e)
+
+        # 对窗口数据降维
+        pca = PCA(n_components=self.pca_n_comp)
+        x = pca.fit_transform(x)
         if self.norm_type == 'window':
             # 在每个数据窗口内进行标准化
             ss = StandardScaler()

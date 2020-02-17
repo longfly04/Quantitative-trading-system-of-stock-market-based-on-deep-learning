@@ -8,7 +8,7 @@ from vnpy.trader.object import *
 
 from utils.tushare_util import DailyDownloader
 from utils.base.stock import Parameters, StockData
-
+from utils.tools import search_file
 
 class DataDownloader(object):
     """
@@ -253,16 +253,3 @@ class PortfolioManager(object):
         """
 
 
-def search_file(path=None, filename=None):
-    """
-    递归查询文件下包含指定字符串的文件
-    """
-    res = []
-    for item in os.listdir(path):
-        item_path = os.path.join(path, item)
-        if os.path.isdir(item_path):
-            search_file(item_path, filename)
-        elif os.path.isfile(item_path):
-            if filename in item_path:
-                res.append(item_path)
-    return res

@@ -42,6 +42,7 @@ from utils.data_manage import StockManager, PortfolioManager, DataDownloader
 from utils.data_process import DataProcessor
 from utils.order_process import OrderProcessor, TradeSimulator
 from utils.data_process import DataProcessor
+from utils.tools import search_file, parse_filename
 
 
 def prepare_train(config=None, download=False):
@@ -148,20 +149,50 @@ def train_forecasting(config=None, save=False, calender=None, history=None):
                                                          train_pct=config['preprocess']['train_pct'],
                                                          validation_pct=config['preprocess']['validation_pct'])
         
-        # 完整训练，保存训练参数
+        """
+        定义参数文件命名方式：
+            YYYYMMDD_hhmmss-loss-val_loss-acc-val_acc-stock_symbol-end_date.h5
+            loss:训练误差，val loss:验证误差，acc：准确率，val acc：验证准确率，stock：代码：end date：训练数据截止日期
 
+        训练流程：
+            1.从save model path中查找权重文件，有则解析文件名，加载最新，无则直接【全量训练】
+            2.从最新文件名，获得end_date，根据已有数据的latest date，计算出还需要预测几个window
+            3.加载最新权重，以1个batch为单位，调用【增量训练】，每次增量训练之后预测1个window，写入文件或return
+            4.直到预测到latest date为止，保存权重。
+            
+            【全量训练】：在training period中，只训练，直到predict period，从predict 的start date开始到
+                        latest date，按照增量训练的方式，1个batch预测1个window
+            【增量训练】：使用1个batch训练，参数来自文件
+        """
 
-        # 迭代训练并预测，输出预测结果
+        # 获取已经保存的模型参数文件
+        model_para_path = search_file(config['training']['save_model_path'], idx)
+        if len(model_para_path) == 0:
+            # 完整训练，保存训练参数
+            pass
+        else:
+            # 载入迭代训练并预测，输出预测结果
+            pass
 
 
 
     return pca_data
 
 
-def forecast_model(config=None, mode='step or total'):
+def forecast_model(config=None, 
+                   mode='total', 
+                   date_range_dict=None, 
+                   data=None,
+                   latest_date=None,
+                   save=True):
     """
     使用预测模型进行训练和预测
+
+    参数：
+        mode：模式，total完整训练，step
+
     """
+
 
 
 
