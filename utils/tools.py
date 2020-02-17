@@ -101,9 +101,10 @@ def parse_filename(filename:str):
     if f.endswith('.h5'):
         f = f[:-3]
         args = f.split('-')
+        # 文件名中一共7个参数
         assert len(args) == 7
         args_dict = {
-            'train_date': arrow.get(args[0][-15:], 'YYYYMMDD_HHmmss'),
+            'train_date': arrow.get(args[0][-15:], 'YYYYMMDD_HHmmss'), # 时间戳，可以唯一绑定文件
             'loss': float(args[1]),
             'val_loss': float(args[2]),
             'acc': float(args[3]),

@@ -36,6 +36,7 @@
 import json
 import numpy as np 
 import pandas as pd 
+import arrow
 from sklearn.decomposition import PCA
 
 from utils.data_manage import StockManager, PortfolioManager, DataDownloader
@@ -77,9 +78,16 @@ def prepare_train(config=None, download=False):
     return calender, history, all_quote
 
 
-def train_forecasting(config=None, save=False, calender=None, history=None):
+def train_forecasting(config=None, save=False, calender=None, history=None, forecasting_deadline=None):
     """
     训练预测模型
+
+        参数：
+            config：配置文件
+            save：是否保存结果至本地
+            calender：交易日历
+            history：股票历史行情
+            forecasting_deadline：指定预测模型预测的截止时间
     """
     assert config is not None
 
@@ -142,6 +150,7 @@ def train_forecasting(config=None, save=False, calender=None, history=None):
         date_price_index['idx'] = range(len(date_price_index))
 
         # 拼接特征，顺序是[行情数据，时间编码，额外特征] ，标签是[标签]
+        assert len(daily_quotes) == len(embeddings_list) == len(scaled_extra_features)
         x = np.concatenate([daily_quotes.values, embeddings_list, scaled_extra_features.values], axis=1)
 
         # 确定训练集和测试集时间范围，模型在测试集中迭代训练并预测
@@ -165,32 +174,69 @@ def train_forecasting(config=None, save=False, calender=None, history=None):
             【增量训练】：使用1个batch训练，参数来自文件
         """
 
-        # 获取已经保存的模型参数文件
+        # 获取已经保存的模型参数文件,查找字符串：股票代码idx
         model_para_path = search_file(config['training']['save_model_path'], idx)
+
         if len(model_para_path) == 0:
-            # 完整训练，保存训练参数
-            pass
+            # 完整训练
+            forecast_model(config=config,
+                           mode='total',
+                           )
         else:
-            # 载入迭代训练并预测，输出预测结果
-            pass
+            # 已有相关权重文件，解析最新文件
+            try:
+                parser_list = [parse_filename(filename=filename) for filename in model_para_path]
+            except Exception as e:
+                print(e)
+            parser_list = [s for s in parser_list if s is not None]
+            
+            # 查找最近训练的权重
+            tmp = arrow.get(0)
+            for d in parser_list:
+                if tmp < d['end_date']:
+                    tmp = d['end_date']
+                    latest_file = d
+
+            # 定位最新训练文件
+            timestamps = latest_file['train_date'].format('YYYYMMDD_HHmmss')
+            latest_file = search_file(config['training']['save_model_path'], timestamps)
+            forecast_model(config=config,
+                           mode='add',
+                           h5_file=latest_file[0],
+                           )
 
 
 
-    return pca_data
+    return None
 
 
 def forecast_model(config=None, 
                    mode='total', 
+                   h5_file=None,
                    date_range_dict=None, 
-                   data=None,
+                   X=None,
+                   Y=None,
+                   date_price_index=None,
                    latest_date=None,
+                   stock=None,
                    save=True):
     """
     使用预测模型进行训练和预测
 
     参数：
-        mode：模式，total完整训练，step
+        config: 模型配置
+        mode：模式，total完整训练，add增量训练
+        h5_file：权重参数文件
+        date_range_dict：范围划分
+        X：训练特征
+        Y：标签
+        date_price_index：日期索引
+        latest_date：训练截止日期 = 预测开始日期
+        stock：股票
+        save:保存与否
 
+    返回：
+        预测股价，loss，acc，权重文件
     """
 
 
