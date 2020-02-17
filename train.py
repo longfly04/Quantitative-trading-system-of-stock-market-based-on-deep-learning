@@ -80,6 +80,8 @@ def train_forecasting(config=None, save=False, calender=None, history=None):
     """
     训练预测模型
     """
+    assert config is not None
+
     data_pro = DataProcessor(date_col=config['data']['date_col'],
                              daily_quotes=config['data']['daily_quotes'],
                              target_col=config['data']['target'])
@@ -87,6 +89,9 @@ def train_forecasting(config=None, save=False, calender=None, history=None):
     assert len(stock_list) == len(history)
     # 对时间进行编码
     (date_list, embeddings_list) = data_pro.encode_date_embeddings(calender)
+
+    # 预测结果的字典：索引、涨跌、方差
+    predict_results_dict = {}
 
     # 对投资标的的历史数据进行建模
     for idx, data in zip(stock_list, history):
@@ -115,11 +120,8 @@ def train_forecasting(config=None, save=False, calender=None, history=None):
         extra_features_no_nan_inf = data_pro.fill_inf(extra_features)
 
         # 超限数量级，对数压缩
-        compressed_extra_features = data_pro.convert_log(pd.DataFrame(extra_features_no_nan_inf), trigger=config['data']['log_threshold'])
-        
-        # 为了防止信息泄露，在数据窗口内使用pca降维
-        # pca = PCA(n_components=config['preprocess']['pca_comp'])
-        # pca_data = pca.fit_transform(compressed_extra_features)
+        scaled_extra_features = data_pro.convert_log(pd.DataFrame(extra_features_no_nan_inf), 
+                                                         trigger=config['data']['log_threshold'])
 
         # 获取标签列
         real_price = daily_quotes.values[:, 0]
@@ -139,15 +141,27 @@ def train_forecasting(config=None, save=False, calender=None, history=None):
         date_price_index['idx'] = range(len(date_price_index))
 
         # 拼接特征，顺序是[行情数据，时间编码，额外特征] ，标签是[标签]
+        x = np.concatenate([daily_quotes.values, embeddings_list, scaled_extra_features.values], axis=1)
 
         # 确定训练集和测试集时间范围，模型在测试集中迭代训练并预测
+        date_range_dict = data_pro.split_train_test_date(date_price_index=date_price_index,
+                                                         train_pct=config['preprocess']['train_pct'],
+                                                         validation_pct=config['preprocess']['validation_pct'])
+        
+        # 完整训练，保存训练参数
 
-        # 
+
+        # 迭代训练并预测，输出预测结果
+
 
 
     return pca_data
 
 
+def forecast_model(config=None, mode='step or total'):
+    """
+    使用预测模型进行训练和预测
+    """
 
 
 

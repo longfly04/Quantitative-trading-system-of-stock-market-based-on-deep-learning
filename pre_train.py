@@ -1,5 +1,6 @@
 import math
 import json
+import numpy as np 
 
 from sklearn.preprocessing import StandardScaler
 
@@ -77,7 +78,6 @@ def main():
         # 训练数据生成
         train_gen = data_pro.batch_data_generator(x, y, date_price_index, date_range_dict, 'train')
         val_gen = data_pro.batch_data_generator(x, y, date_price_index, date_range_dict, 'validation')
-        reinforcement = data_pro.batch_data_generator(x, y, date_price_index, date_range_dict, 'reinforcement')
         
         # 定义模型
         stock_name = stock_his.stock_info[idx]['symbol']

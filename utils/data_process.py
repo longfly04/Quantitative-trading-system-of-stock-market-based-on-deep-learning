@@ -912,7 +912,7 @@ class DataProcessor():
     @info
     def split_train_test_date(self, 
                               date_price_index,
-                              training_pct=0.98,
+                              training_pct=0.5,
                               validation_pct=0.1,
                               ):
         """
@@ -925,7 +925,7 @@ class DataProcessor():
         window_len = self.window_len
         predict_len = self.predict_len
 
-        data_length = date_price_index.shape[0] - window_len - predict_len
+        data_length = date_price_index.shape[0] - window_len
         training_length = int(data_length * training_pct)
         validation_length = int(training_length * validation_pct)
         predict_length = data_length - training_length
@@ -933,7 +933,7 @@ class DataProcessor():
         training_date_range = date_price_index.iloc[:training_length]
         validation_date = training_date_range.sample(n=validation_length)
         predict_date = date_price_index.iloc[training_length:-
-                                             window_len - predict_len]
+                                             window_len]
 
         date_range_dict = dict([('train', training_date_range.index.values),
                                 ('validation', validation_date.index.values),
@@ -1007,7 +1007,7 @@ class DataProcessor():
 
         assert X.shape[0] == date_price_index.shape[0]
 
-        start_idx = date_price_index['num'].loc[start_date]
+        start_idx = date_price_index['idx'].loc[start_date]
         x_end_idx = start_idx + window_len
         y_start_idx = start_idx + window_len + 1
         y_end_idx = start_idx + window_len + predict_len + 1
