@@ -13,10 +13,11 @@
 					"balancesheet_", "cashflow_", "forecast_", "express_", "dividend_", "financeindicator_",
 					"HSGTflow_", "margin_", "pledge_", "repurchase_", "desterilization_", "block_",
 					"shibor_", "shiborquote_", "shiborLPR_", "libor_", "hibor_", "wen_"],
-		"date_col":"cal_date"
+		"date_col":"cal_date",
+		"log_threshold":100
 	},
 	"preprocess":{
-		"pca_comp":0.9999,
+		"pca_comp":100,
 		"window_len":55,
 		"predict_len":5,
 		"training_pct":0.98,

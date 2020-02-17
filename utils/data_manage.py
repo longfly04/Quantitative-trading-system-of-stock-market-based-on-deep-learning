@@ -128,16 +128,16 @@ class StockManager(object):
         self.stock_data_list = []
         self.preprocessed = False
 
-        self.load_data()
+        self._load_data()
 
-    def load_data(self, ):
+    def _load_data(self, ):
         """
         加载最新数据
         """
         for st in self.stock_pool:
             path_ = search_file(self.data_path, st)
             try:
-                data = pd.read_csv(path_[0])
+                data = pd.read_csv(path_[0],)
                 self.stock_data_list.append(data)
             except Exception as e:
                 print(e,)
@@ -170,6 +170,7 @@ class StockManager(object):
             data = data_.T.drop_duplicates(keep='first').T
             data.fillna(axis=0, method='ffill', inplace=True)
             data.fillna(0.001, inplace=True)
+
             processed_list.append(data)
 
         self.stock_data_list = processed_list
@@ -193,7 +194,7 @@ class StockManager(object):
         """
         if self.preprocessed:
             print('Calender length is ', len(self.trade_calender))
-            return [i.format('YYYYMMDD') for i in self.trade_calender]
+            return self.trade_calender
         else:
             print("Please preprocess the data list firstly.")
             return None
@@ -221,7 +222,6 @@ class StockManager(object):
         total_quote = np.array(quote_list)
         print('Total quote shape is ', total_quote.shape )
         return total_quote
-
 
 class PortfolioManager(object):
     """

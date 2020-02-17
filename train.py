@@ -34,6 +34,10 @@
         3.环境配置文件：记录环境配置参数，强化学习算法参数
 """
 import json
+import numpy as np 
+import pandas as pd 
+from sklearn.decomposition import PCA
+
 from utils.data_manage import StockManager, PortfolioManager, DataDownloader
 from utils.data_process import DataProcessor
 from utils.order_process import OrderProcessor, TradeSimulator
@@ -72,27 +76,78 @@ def prepare_train(config=None, download=False):
     return calender, history, all_quote
 
 
-def train_forecasting(config=None, save=False, calender, history):
+def train_forecasting(config=None, save=False, calender=None, history=None):
     """
     训练预测模型
     """
     data_pro = DataProcessor(date_col=config['data']['date_col'],
                              daily_quotes=config['data']['daily_quotes'],
-                             target_col=config['data']['target_col'])
+                             target_col=config['data']['target'])
     stock_list = config['data']['stock_code']
-    assert len(stock_code) == len(history)
+    assert len(stock_list) == len(history)
     # 对时间进行编码
-    date_list, embeddings_list = data_pro.encode_date_embeddings(calender)
+    (date_list, embeddings_list) = data_pro.encode_date_embeddings(calender)
+
     # 对投资标的的历史数据进行建模
     for idx, data in zip(stock_list, history):
-        # 计算技术指标
+
+        # 计算技术指标、填充空值
         data_tec = data_pro.cal_technical_indicators(data, date_index=date_list)
-        # 计算傅里叶变换
-        data_fft = data_pro.cal_fft(data, plot=True, save=True)
+        data_tec = data_pro.fill_nan(data_tec)
+
+        # 计算傅里叶变换、填空
+        data_fft = data_pro.cal_fft(data,)
+        data_fft = data_pro.fill_nan(data_fft)
+
         # 计算日行情
         daily_quotes = data_pro.cal_daily_quotes(data)
-        # 分离其他特征
+
+        # 分离其他特征、填空
         daily_other_features = data_pro.split_quote_and_others(data)
+        daily_other_features = data_pro.fill_nan(daily_other_features)
+
+        assert data_tec.shape[0] == data_fft.shape[0] == daily_other_features.shape[0]
+
+        # 将技术指标、傅里叶变换和除了额外指标进行拼接
+        extra_features = np.concatenate([data_tec, data_fft, daily_other_features], axis=1).astype(float)
+        
+        # 处理无穷数
+        extra_features_no_nan_inf = data_pro.fill_inf(extra_features)
+
+        # 超限数量级，对数压缩
+        compressed_extra_features = data_pro.convert_log(pd.DataFrame(extra_features_no_nan_inf), trigger=config['data']['log_threshold'])
+        
+        # 为了防止信息泄露，在数据窗口内使用pca降维
+        # pca = PCA(n_components=config['preprocess']['pca_comp'])
+        # pca_data = pca.fit_transform(compressed_extra_features)
+
+        # 获取标签列
+        real_price = daily_quotes.values[:, 0]
+        if config['preprocess']['predict_type'] == 'real':
+            y = real_price
+        elif config['preprocess']['predict_type'] == 'diff':
+            y = daily_quotes.values[:, 1]
+        elif config['preprocess']['predict_type'] == 'pct':
+            y = daily_quotes.values[:, 2]
+        else:
+            raise ValueError('Please input right prediction type: real/diff/pct .')
+
+        # 建立时间和股价的索引，作为该数据集的全局索引，
+        date_index = pd.to_datetime(date_list, format='%Y%m%d').date
+        date_price_index = pd.DataFrame(np.concatenate([date_list.reshape((-1, 1)), real_price.reshape((-1, 1))],
+                                  axis=1), columns=['date', 'price'], index=date_index)
+        date_price_index['idx'] = range(len(date_price_index))
+
+        # 拼接特征，顺序是[行情数据，时间编码，额外特征] ，标签是[标签]
+
+        # 确定训练集和测试集时间范围，模型在测试集中迭代训练并预测
+
+        # 
+
+
+    return pca_data
+
+
 
 
 

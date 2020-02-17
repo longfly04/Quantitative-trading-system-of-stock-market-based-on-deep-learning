@@ -44,7 +44,7 @@ def main():
         daily_features = data_pro.concat_features([data_[other_features_col].values,
                                                    data_tec, 
                                                    data_fft],
-                                                   pca_comp=config['preprocess']['pca_comp'])
+                                                )
         # 组合成训练使用的标签，以及日期价格序列
         real_price = daily_quotes.values[:, 0]
         y = real_price

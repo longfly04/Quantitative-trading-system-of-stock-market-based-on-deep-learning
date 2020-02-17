@@ -16,6 +16,7 @@ import stockstats
 from numpy import newaxis
 from pandas.plotting import register_matplotlib_converters
 from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
 
 from .base.stock import *
 from .tools import *
@@ -34,7 +35,7 @@ class DataProcessor():
                  predict_len=5,
                  predict_type='pct',
                  window_len=55,
-                 norm_type='global',
+                 norm_type='window',
                  predict_steps=5
                 ):
         """
@@ -216,7 +217,6 @@ class DataProcessor():
         """
         获取数据的统计信息
         """
-
         print('1.数据集共有{}个样本，{}个特征。'.format(data.shape[0], data.shape[1]))
         print('2.数据集基本信息：')
         print(data.describe())
@@ -247,7 +247,6 @@ class DataProcessor():
                   (data.shape[0] - data_.shape[0]))
         return data_
 
-    @info
     def drop_dup_fill_nan(self, dataframe):
         """
         去掉重复的数据 将空值填上数据 符合时间序列的连续性 输入为股价数据集 输出为去重之后的股价数据集
@@ -261,16 +260,25 @@ class DataProcessor():
         # 剩下的空值用0填充
         return data_new
 
-    @info
-    def fill_inf(self, dataframe):
+    def fill_nan(self, dataframe:pd.DataFrame, value=0.001):
+        """
+        填充空值，支持对DataFrame填充
+        """
+        data = dataframe
+        print('Filled %d Nans .' %(data.isnull().sum().sum()))
+        data.fillna(axis=0, method='ffill', inplace=True)
+        data.fillna(value, inplace=True)
+        return data
+
+    def fill_inf(self, array:np.array):
         """
         处理数据集的无穷值，用固定值填充，或者用0
         """
-        data_ = np.array(dataframe)
+        data_ = np.array(array)
         data_filled = np.apply_along_axis(
             self._fill_inf_with_zero, axis=0, arr=data_)
 
-        return pd.DataFrame(data_filled)
+        return data_filled
 
     def _fill_inf_with_zero(self, arr):
         """
@@ -293,8 +301,8 @@ class DataProcessor():
 
         return a
 
-    @info
-    def convert_log(self, dataframe, trigger=10):
+
+    def convert_log(self, dataframe:pd.DataFrame, trigger=100):
         """
         对数值超过触发门限的列 取对数，对负数取绝对值再取对数，结果再取负
         """
@@ -611,6 +619,10 @@ class DataProcessor():
                 plt.savefig('saved_figures\\36_close_DMI.png')
             plt.show()
 
+        # 处理异常值，将布尔值转换为 -1，1
+        dataset_tech[dataset_tech.values == False] = -1
+        dataset_tech[dataset_tech.values == True] = 1
+
         return dataset_tech
 
     @info
@@ -700,7 +712,7 @@ class DataProcessor():
             date_list = pd.to_datetime(timeseries, format='%Y%m%d').to_list()
             date_list = [arrow.get(t) for t in date_list]
         else:
-            date_list = [arrow.get(timeseries, 'YYYYMMDD')]
+            date_list = timeseries
 
         embedding_list = []
         for dt in date_list:
@@ -859,22 +871,23 @@ class DataProcessor():
         """
         other_features_col = [x for x in data.columns.values if x not in self.daily_quotes]
         # 删除自动索引列和日期列
-        del_col = [x for x in other_features_col if x.endswith('date')]
-        del_col = ['Unnamed: 0'] + del_col
+        del_col = [x for x in other_features_col if x.endswith('date') or x.startswith('Unnamed') or x.startswith(self.date_col)]
         for d in del_col:
-            other_features_col.remove(d)
+            try:
+                other_features_col.remove(d)
+            except Exception as e:
+                print(e)
 
         return data[other_features_col]
 
     @info
-    def concat_features(self, data_list, pca_comp=0.99):
+    def concat_features(self, data_list,):
         """
         将所有除了每日行情之外的特征进行拼接，并且完成去重、消除空值、无穷值、将数量级较大的数据缩放取对数
 
         输出：
             经过PCA降维后的array
         """
-        from sklearn.decomposition import PCA
 
         full_data = []
         for data in data_list:
@@ -885,14 +898,16 @@ class DataProcessor():
 
         full_data_ = np.concatenate(full_data, axis=1)
 
-        if pca_comp < 1:
-            # pca 以0.9999的百分比保留方差，默认0.99，若等于1，则不进行主成分分析
-            pca = PCA(n_components=pca_comp)
-            pca_data = pca.fit_transform(full_data_)
+        return full_data_
 
-            return pca_data
-        else:
-            return full_data_
+
+    def principal_component_analysis(self, data, pca_dim):
+        """
+        指定维度进行pca降维，用于对窗口数据的降维，
+        """
+        pca = PCA(n_components=pca_dim)
+        pca_data = pca.fit_transform(data)
+        return pca_data
 
     @info
     def split_train_test_date(self, 
