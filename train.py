@@ -43,7 +43,10 @@ from utils.data_manage import StockManager, PortfolioManager, DataDownloader
 from utils.data_process import DataProcessor
 from utils.order_process import OrderProcessor, TradeSimulator
 from utils.data_process import DataProcessor
-from utils.tools import search_file, parse_filename
+
+from model.baseline import LSTM_Model
+
+from utils.tools import search_file, parse_filename, add_to_df
 
 
 def prepare_train(config=None, download=False):
@@ -145,19 +148,23 @@ def train_forecasting(config=None, save=False, calender=None, history=None, fore
 
         # 建立时间和股价的索引，作为该数据集的全局索引，
         date_index = pd.to_datetime(date_list, format='%Y%m%d').date
-        date_price_index = pd.DataFrame(np.concatenate([date_list.reshape((-1, 1)), real_price.reshape((-1, 1))],
-                                  axis=1), columns=['date', 'price'], index=date_index)
-        date_price_index['idx'] = range(len(date_price_index))
-
+        date_price_index = pd.DataFrame({
+                                            'date':date_list, 
+                                            'price': real_price,
+                                            'idx':range(len(date_index))
+                                        },
+                                        index=date_index)
         # 拼接特征，顺序是[行情数据，时间编码，额外特征] ，标签是[标签]
         assert len(daily_quotes) == len(embeddings_list) == len(scaled_extra_features)
         x = np.concatenate([daily_quotes.values, embeddings_list, scaled_extra_features.values], axis=1)
-
         # 确定训练集和测试集时间范围，模型在测试集中迭代训练并预测
         date_range_dict = data_pro.split_train_test_date(date_price_index=date_price_index,
                                                          train_pct=config['preprocess']['train_pct'],
                                                          validation_pct=config['preprocess']['validation_pct'])
-        
+        # 分解训练、验证数据的时间范围
+        total_train_daterange = date_range_dict['train']
+        validation_daterange = date_range_dict['validation']
+        step_by_step_train_daterange = date_range_dict['predict']
         """
         定义参数文件命名方式：
             YYYYMMDD_hhmmss-loss-val_loss-acc-val_acc-stock_symbol-end_date.h5
@@ -168,6 +175,7 @@ def train_forecasting(config=None, save=False, calender=None, history=None, fore
             2.从最新文件名，获得end_date，根据已有数据的latest date，计算出还需要预测几个window
             3.加载最新权重，以1个batch为单位，调用【增量训练】，每次增量训练之后预测1个window，写入文件或return
             4.直到预测到latest date为止，保存权重。
+            5.预测一定是step by step的，为了避免信息泄露，确保时序因果性
             
             【全量训练】：在training period中，只训练，直到predict period，从predict 的start date开始到
                         latest date，按照增量训练的方式，1个batch预测1个window
@@ -177,12 +185,7 @@ def train_forecasting(config=None, save=False, calender=None, history=None, fore
         # 获取已经保存的模型参数文件,查找字符串：股票代码idx
         model_para_path = search_file(config['training']['save_model_path'], idx)
 
-        if len(model_para_path) == 0:
-            # 完整训练
-            forecast_model(config=config,
-                           mode='total',
-                           )
-        else:
+        if len(model_para_path) > 0:
             # 已有相关权重文件，解析最新文件
             try:
                 parser_list = [parse_filename(filename=filename) for filename in model_para_path]
@@ -196,32 +199,84 @@ def train_forecasting(config=None, save=False, calender=None, history=None, fore
                 if tmp < d['end_date']:
                     tmp = d['end_date']
                     latest_file = d
-
             # 定位最新训练文件
             timestamps = latest_file['train_date'].format('YYYYMMDD_HHmmss')
-            latest_file = search_file(config['training']['save_model_path'], timestamps)
-            forecast_model(config=config,
-                           mode='add',
-                           h5_file=latest_file[0],
-                           )
+            latest_date = arrow.get(latest_file['end_date'], 'YYYYMMDD').date
+            latest_file = search_file(config['training']['save_model_path'], timestamps)[0]
+        else:
+            latest_date = total_train_daterange[-1]
+            latest_file = None
+        # 确定step预测的起始时间
+        step_by_step_start_date = arrow.get(latest_date).shift(days=1)
+        if forecasting_deadline is not None:
+            step_by_step_end_date = arrow.get(forecasting_deadline, 'YYYYMMDD')
+        else:
+            step_by_step_end_date = arrow.get(step_by_step_train_daterange[-1])
+
+        # 定义模型
+        stock_name = idx
+        model = LSTM_Model(config, name=stock_name)
+
+        # 定义输入输出维度
+        input_shape = (config['preprocess']['window_len'], x.shape[-1])
+        output_shape = (config['preprocess']['predict_len'], )
+        batch_size = config['training']['batch_size']
+
+        # 定义每一代训练、验证的次数
+        epoch_steps = (total_train_daterange.shape[0] - batch_size, validation_daterange.shape[0])
+        
+        # 根据输入输出维度，每一代的训练次数，构建模型
+        model.build_model(input_shape=input_shape, output_shape=output_shape, epoch_steps=epoch_steps)
+
+        # 定义存放结果数据的dataframe，包括预测涨跌，训练均方误差和精确度
+        col_names = []
+        for i in range(config['preprocess']['predict_len']):
+            col_name = 'pred_' + str(i)
+            col_names.append(col_name)
+        col_names = ['predict_date'] + col_names + ['epoch_loss', 'epoch_val_loss', 'epoch_acc', 'epoch_val_acc']
+        results_df = pd.DataFrame(columns=col_names)
+        
+        # 全量训练，改为使用普通方法训练，节省时间
+        if latest_file is None:
+            # 训练数据生成
+            train_gen = data_pro.batch_data_generator(x, y, date_price_index, total_train_daterange, 'train')
+            val_gen = data_pro.batch_data_generator(x, y, date_price_index, validation_daterange, 'validation')
+            
+            epoch_loss, epoch_val_loss, epoch_acc, epoch_val_acc = \
+                model.train_model_generator(train_gen, val_gen, 
+                                            save_model=True, 
+                                            end_date=arrow.get(latest_date).format('YYYYMMDD'))
+            pred_x = data_pro.get_step_predict_X(x, date_price_index, step_by_step_start_date)
+            result = model.predict_one_step(pred_x, )
+            row_data = [step_by_step_start_date.format('YYYYMMDD')] + list(result) + [epoch_loss, epoch_val_loss, epoch_acc, epoch_val_acc]
+            # 将一次预测的结果存入
+            results_df = add_to_df(results_df, col_names, row_data)
+        else:
+            # 加载已有的权重，按步训练，按步预测
+            model.load_model_weight(latest_file)
 
 
+        for date_step in step_by_step_train_daterange[1:]:
+            pred_x = data_pro.get_step_predict_X(x, date_price_index, date_step)
+            results = model.predict_one_step(date_step, pred_x,)
 
     return None
 
 
-def forecast_model(config=None, 
-                   mode='total', 
-                   h5_file=None,
-                   date_range_dict=None, 
-                   X=None,
-                   Y=None,
-                   date_price_index=None,
-                   latest_date=None,
-                   stock=None,
-                   save=True):
+def forecast_step_by_step(config=None, 
+                          X=None,
+                          Y=None,
+                          input_dim=None,
+                          data_processor=None,
+                          h5_file=None,
+                          date_price_index=None,
+                          latest_date=None,
+                          deadline=None,
+                          stock=None,
+                          save=True,
+                          ):
     """
-    使用预测模型进行训练和预测
+    训练一步预测一步，最后保存模型权重，输出预测结果的列表
 
     参数：
         config: 模型配置
@@ -230,14 +285,42 @@ def forecast_model(config=None,
         date_range_dict：范围划分
         X：训练特征
         Y：标签
+        input_dim:模型输入数据维度
         date_price_index：日期索引
         latest_date：训练截止日期 = 预测开始日期
         stock：股票
         save:保存与否
-
+        deadline:指定模型step by step 预测到什么时间
     返回：
         预测股价，loss，acc，权重文件
     """
+
+
+
+    
+    if config['training']['train']:
+        # 训练模型或者载入模型，路径是与股票代码对应的列表
+        if config['training']['load']:
+            model_file = config['training']['load_path'][idx]
+            model.load_model(model_file)
+            if config['training']['continue']:
+                # 载入上次训练的权重并继续训练
+                model.train_model_generator(train_gen, val_gen)
+        else:
+            model.train_model_generator(train_gen, val_gen)
+    elif config['prediction']['well_trained']:
+        # 不训练模型，使用已经训练好的，well trained权重
+        model_file = config['prediction']['well_trained_model'][idx]
+        model.load_model(model_file)
+    # 预测结果的长度是标签长度与预测步数的乘积
+    predict_len = output_shape[0] * config['prediction']['predict_steps']
+    assert predict_len <= date_range_dict['predict'].shape[0]
+    predict_data = data_processor.predict_data_x(x, date_price_index, date_range_dict['predict'][:predict_len])
+    results = model.predict_future(predict_data)
+    
+    real_results = data_processor.cal_daily_price(date_price_index, date_range_dict['train'][-1], results)
+    data_vis = DataVisualiser(config, name=stock_name)
+    data_vis.plot_prediction(date_range_dict=date_range_dict, prediction=real_results, date_price_index=date_price_index)
 
 
 
@@ -264,7 +347,10 @@ def main():
     # 准备交易行情和日历
     calender, history, all_quote = prepare_train(config, download=False)
     # 训练预测模型，得到预测向量和风险向量
-    predict_price = train_forecasting(config, calender=calender, history=history)
+    predict_price = train_forecasting(config, 
+                                      calender=calender, 
+                                      history=history, 
+                                      forecasting_deadline='20180101')
     # 训练决策模型，初始化资金，得到
 
 

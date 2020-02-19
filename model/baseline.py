@@ -63,7 +63,7 @@ class LSTM_Model(Model):
             if layer['type'] == 'flatten':
                 self.model.add(Flatten())
 
-        self.model.compile(loss=self.model_cfg['loss'], optimizer=self.model_cfg['optimizer'])
+        self.model.compile(loss=self.model_cfg['loss'], optimizer=self.model_cfg['optimizer'], metrics=['accuracy'])
         self.model.summary()
         
         if self.model_cfg['plot_model']:
@@ -73,7 +73,7 @@ class LSTM_Model(Model):
         print('[Model] Model Compiled')
 
     @info
-    def load_model(self, model_file=None):
+    def load_model_weight(self, model_file=None):
         '''
         从已经训练好的模型中载入模型
         '''
@@ -81,24 +81,15 @@ class LSTM_Model(Model):
         self.model = load_model(model_file)
 
     @info
-    def train_model(self, x, y, val_data):
+    def train_model(self, x, y, save_model=True, end_date=None):
         '''
-        使用普通方法训练
+        使用普通方法训练，x,y都是batched data
         '''
         print('[Model] Training Started')
 
-        save_fname = os.path.join(self.train_cfg['save_path'],
-                                 '%s-e%s.h5' % (dt.datetime.now().strftime('%Y%m%d-%H%M%S'), 
-                                 str(self.train_cfg['epochs'])))
-
         callbacks = [
-            EarlyStopping(monitor='val_loss', patience=3),
-            ModelCheckpoint(filepath=save_fname, monitor='val_loss', save_best_only=True),
             TensorBoard(log_dir=self.train_cfg['tensorboard_dir']),
             ]
-
-        x = x[x.shape[0]%self.train_cfg['batch_size']:]
-        y = y[y.shape[0]%self.train_cfg['batch_size']:]
 
         self.history = self.model.fit(
                                       x,
@@ -106,14 +97,26 @@ class LSTM_Model(Model):
                                       epochs=self.train_cfg['epochs'],
                                       batch_size=self.train_cfg['batch_size'],
                                       callbacks=callbacks,
-                                      validation_data=val_data,
                                       )
-        if self.train_cfg['save']:
-            if not os.path.exists(self.train_cfg['save_dir']): 
-                os.makedirs(self.train_cfg['save_dir'])
+
+        epoch_loss = self.history.history['loss'][-1]
+        epoch_val_loss = self.history.history['val_loss'][-1]
+        epoch_acc = self.history.history['acc'][-1]
+        epoch_val_acc = self.history.history['val_acc'][-1]
+        if save_model:
+            if not os.path.exists(self.train_cfg['save_model_path']): 
+                os.makedirs(self.train_cfg['save_model_path'])
+            loss_str = str(epoch_loss)[:6] + str(epoch_val_loss)[:6]
+            acc_str = str(epoch_acc)[:6] + str(epoch_val_acc)[:6]
+            stock_name = self.name
+            save_fname = os.path.join(self.train_cfg['save_model_path'],
+                                 '%s-%s-%s-%s-%s.h5' % (dt.datetime.now().strftime('%Y%m%d_%H%M%S'),
+                                               loss_str, acc_str, stock_name, end_date))
             self.model.save(save_fname)
             print('[Saving] Model saved as %s' % save_fname)
         print('[Model] Training Completed.')
+
+        return epoch_loss, epoch_val_loss, epoch_acc, epoch_val_acc
 
     @info
     def train_model_generator(self, xy_gen, val_gen, save_model=True, end_date=None):
@@ -135,15 +138,16 @@ class LSTM_Model(Model):
                                                 callbacks=callbacks,
                                                 validation_data=val_gen,
                                                 validation_steps=self.epoch_steps[1],
-                                                validation_freq=self.train_cfg['validation_freq']
+                                                validation_freq=self.train_cfg['validation_freq'],
                                                 )
+
+        epoch_loss = self.history.history['loss'][-1]
+        epoch_val_loss = self.history.history['val_loss'][-1]
+        epoch_acc = self.history.history['acc'][-1]
+        epoch_val_acc = self.history.history['val_acc'][-1]
         if save_model:
             if not os.path.exists(self.train_cfg['save_model_path']): 
                 os.makedirs(self.train_cfg['save_model_path'])
-            epoch_loss = self.history.history['loss'][-1]
-            epoch_val_loss = self.history.history['val_loss'][-1]
-            epoch_acc = self.history.history['acc'][-1]
-            epoch_val_acc = self.history.history['val_acc'][-1]
             loss_str = str(epoch_loss)[:6] + str(epoch_val_loss)[:6]
             acc_str = str(epoch_acc)[:6] + str(epoch_val_acc)[:6]
             stock_name = self.name
@@ -154,9 +158,11 @@ class LSTM_Model(Model):
             print('[Saving] Model saved as %s' % save_fname)
         print('[Model] Generator Training Completed.')
 
+        return epoch_loss, epoch_val_loss, epoch_acc, epoch_val_acc
+
 
     @info
-    def predict_future(self, pred_x, save_result=True):
+    def predict_seqence(self, pred_x, save_result=True):
         """
         使用普通方式预测序列，这种预测方式可能是因为PCA的原因引入了未来信息造成的信息泄露，
         精度比想象中高，趋势把握的很准，很奇怪。
@@ -208,9 +214,14 @@ class LSTM_Model(Model):
         return ret_list
 
     @info
-    def predict_unknown(self, pred_x, save_result=True):
+    def predict_one_step(self, pred_x, save_result=False):
         """
-        真正意义上的预测未来的未知数据，使用现有数据集的最后一个窗口预测未来数据
+        预测未来的未知数据，使用现有数据集的最后一个窗口预测未来数据
+
+        参数：
+            date_step:对应的日期步
+            pred_x:特征
+            save：保存选项
         """
         batch_size = self.train_cfg['batch_size']
         predict_type = self.pre_cfg['predict_type']

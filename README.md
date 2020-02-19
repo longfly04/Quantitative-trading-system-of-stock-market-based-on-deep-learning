@@ -4,7 +4,7 @@ Quantitative analysis with deep learning prediction and reinforcement learning t
 
 I am trying to utilise LSTM model to predict stock motivations as a foresight of the agent, which will observe a package of portfolio asset , and trade between them. 
 
-The prediction model serves as a statistician where the agent, who will act in reinforcement learning manners , will trial errors and yielding more profit . The two models will bound together to achieve the goal.
+The prediction model serves as a statistician where the agent, who will act in reinforcement learning manners , will trial errors to yield more profit . Two models will bound together to achieve the goal.
 
 
 ---

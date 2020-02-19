@@ -915,7 +915,7 @@ class DataProcessor():
     @info
     def split_train_test_date(self, 
                               date_price_index,
-                              training_pct=0.5,
+                              train_pct=0.5,
                               validation_pct=0.1,
                               ):
         """
@@ -924,12 +924,12 @@ class DataProcessor():
         输出：
             dict keys：training, validation,
         """
-        predict_pct = 1 - training_pct
+        predict_pct = 1 - train_pct
         window_len = self.window_len
         predict_len = self.predict_len
 
         data_length = date_price_index.shape[0] - window_len
-        training_length = int(data_length * training_pct)
+        training_length = int(data_length * train_pct)
         validation_length = int(training_length * validation_pct)
         predict_length = data_length - training_length
 
@@ -946,7 +946,7 @@ class DataProcessor():
         return date_range_dict
 
 
-    def batch_data_generator(self, X, Y, date_price_index, date_range_dict, gen_type='train', batch_size=32):
+    def batch_data_generator(self, X, Y, date_price_index, date_range, gen_type='train', batch_size=32):
         """
         批数据生成器，产生训练数据和验证集数据，以批为单位
 
@@ -958,7 +958,7 @@ class DataProcessor():
         assert X.shape[0] == Y.shape[0] == date_price_index.shape[0]
 
         while 1:
-            data_dates = date_range_dict[gen_type]
+            data_dates = date_range
             x_train = []
             y_train = []
             if gen_type == 'predict':
@@ -991,7 +991,7 @@ class DataProcessor():
 
         predict_data = []
         for idx in range(0, len(predict_date_range), predict_len):
-            x_end_idx = date_price_index['num'].loc[predict_date_range[idx]]
+            x_end_idx = date_price_index['idx'].loc[predict_date_range[idx]]
             assert x_end_idx >= window_len
             x_end_idx = x_end_idx - 1
             x_start_idx = x_end_idx - window_len
@@ -999,6 +999,25 @@ class DataProcessor():
             predict_data.append(x_predict)
 
         return np.array(predict_data)
+
+    def get_step_predict_X(self, X, date_price_index, predict_date):
+        """
+        获得一个窗口数据特征，用于预测一步，预测从predict_date开始的predict_len长度的波动
+        """
+        window_len = self.window_len
+
+        x_end_idx = date_price_index['idx'].loc[predict_date]
+        assert x_end_idx >= window_len
+        x_end_idx = x_end_idx - 1
+        x_start_idx = x_end_idx - window_len
+        x_predict = X[x_start_idx: x_end_idx]
+
+        return x_predict
+
+    def batch_data_sliceing(self,):
+        """
+        将数据切割成窗口，再拼接为batch，便于用普通fit方法训练。
+        """
 
     def _windowed_data(self, X, Y=None, date_price_index=None, start_date=None):
         """
@@ -1023,8 +1042,8 @@ class DataProcessor():
             print(e)
 
         # 对窗口数据降维
-        pca = PCA(n_components=self.pca_n_comp)
-        x = pca.fit_transform(x)
+        # pca = PCA(n_components=self.pca_n_comp)
+        # x = pca.fit_transform(x)
         if self.norm_type == 'window':
             # 在每个数据窗口内进行标准化
             ss = StandardScaler()

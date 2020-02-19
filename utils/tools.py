@@ -5,6 +5,7 @@ import logging
 from functools import wraps
 import traceback
 import arrow
+import pandas as pd 
 
 class Timer():
     '''
@@ -116,4 +117,17 @@ def parse_filename(filename:str):
     else:
         return None
 
+
+def add_to_df(df:pd.DataFrame, cols, row_data):
+    """
+    向DataFrame中按行插入数据，cols与数据row_data一一对应
+    """
+    assert len(cols) == len(row_data)
+    data = {}
+    for item in zip(cols, row_data):
+        data[item[0]] = item[1]
+    new_df = pd.DataFrame(data=data)
+    new_df = pd.concat([df, new_df], axis=0, ignore_index=True)
+
+    return new_df
 
