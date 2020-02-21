@@ -10,11 +10,9 @@
 """
 import json
 
-
-from .preparaion import prepare_train
-from .train_forecasting import train_forecasting
-from .train_decision import train_decision
-
+from quantatitive_analysis_with_deep_learning.preparaion import prepare_train
+from quantatitive_analysis_with_deep_learning.train_forecasting import train_forecasting
+from quantatitive_analysis_with_deep_learning.train_decision import train_decision
 
 
 def main():

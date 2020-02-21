@@ -4,7 +4,7 @@
 		"date_range":["20090101", "20191231"],
         "data_dir":"dataset",
 		"SH50_list_path":"dataset\\上证50成分股.txt",
-		"token_path":"utils\\base\\token.tkn",
+		"token_path":"quantitative_analysis_with_deep_learning\\utils\\base\\token.tkn",
 		"stock_code":["601601", "601088", "600703", "600196", "600276"],
 		"target":"daily_close",
 		"daily_quotes":["daily_trade_date","daily_open","daily_high","daily_low","daily_close",
@@ -31,7 +31,7 @@
 		"train":true,
 		"epochs":3,
 		"batch_size":32,
-		"save_model_path":"saved_models",
+		"save_model_path":"quantitative_analysis_with_deep_learning\\saved_models",
 		"load":false,
 		"load_path":["saved_models\\20191221-152257-loss_2.8935-val_loss_4.8066-601601.h5",
 					 "saved_models\\20191221-153723-loss_2.5891-val_loss_4.4232-601088.h5",
@@ -43,7 +43,7 @@
 		"validation_freq":1
 	},
 	"model":{
-        "model_path":"model",
+        "model_path":"quantitative_analysis_with_deep_learning\\model",
 		"lstm":{
 			"loss": "mse",
 			"optimizer": "adam",
@@ -89,7 +89,7 @@
 		"predict":true,
 		"predict_steps":1,
 		"well_trained":false,
-		"save_result_path":"saved_results",
+		"save_result_path":"quantitative_analysis_with_deep_learning\\saved_results",
 		"well_trained_dir":"well_trained",
 		"well_trained_model":[""],
 		"output_path":"output",

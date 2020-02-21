@@ -226,6 +226,8 @@ class StockManager(object):
         print('Total quote shape is ', total_quote.shape )
         return total_quote
 
+
+
 class PortfolioManager(object):
     """
     资产管理器，提供Gym环境的资产向量，回测情况下，通过行情历史计算，实盘情况下，通过交易接口获取账户信息
