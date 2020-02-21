@@ -145,13 +145,9 @@ def train_forecasting(config=None, save=False, calender=None, history=None, fore
         训练流程：
             1.从save model path中查找权重文件，有则解析文件名，加载最新，无则直接【全量训练】
             2.从最新文件名，获得end_date，根据已有数据的latest date，计算出还需要预测几个window
-            3.加载最新权重，以1个batch为单位，调用【增量训练】，每次增量训练之后预测1个window，写入文件或return
+            3.加载最新权重，训练之后预测1个window，写入文件或return
             4.直到预测到latest date为止，保存权重。
             5.预测一定是step by step的，为了避免信息泄露，确保时序因果性
-            
-            【全量训练】：在training period中，只训练，直到predict period，从predict 的start date开始到
-                        latest date，按照增量训练的方式，1个batch预测1个window
-            【增量训练】：使用1个batch训练，参数来自文件
         """
 
         # 获取已经保存的模型参数文件,查找字符串：股票代码idx

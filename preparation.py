@@ -1,5 +1,6 @@
 from utils.data_manage import StockManager, DataDownloader
 
+
 def prepare_train(config=None, download=False):
     """
     数据准备
