@@ -29,7 +29,7 @@
 	},
 	"training":{
 		"train":true,
-		"epochs":5,
+		"epochs":3,
 		"batch_size":32,
 		"save_model_path":"saved_models",
 		"load":false,

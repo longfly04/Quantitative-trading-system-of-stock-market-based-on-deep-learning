@@ -10,9 +10,11 @@
 """
 import json
 
-from preparaion import prepare_train
-from train_forecasting import train_forecasting
-from train_decision import train_decision
+
+from .preparaion import prepare_train
+from .train_forecasting import train_forecasting
+from .train_decision import train_decision
+
 
 
 def main():
@@ -25,7 +27,7 @@ def main():
     train_forecasting(config, 
                       calender=calender, 
                       history=history, 
-                      forecasting_deadline='20150101')
+                      forecasting_deadline='20160101')
     # 训练决策模型，初始化资金，得到
     train_decision()
 
