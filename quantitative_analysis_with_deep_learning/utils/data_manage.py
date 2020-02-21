@@ -97,7 +97,7 @@ class DataDownloader(object):
         end_date = self.current_date
 
         st_code = '600000'
-        para = Parameters(ts_code=st_code, start_date=start_date, end_date=end_date)
+        para = Parameters(ts_code=st_code, start_date=start_date, end_date=end_date, )
         stockdata = StockData(para=para)
         stock_calender = stockdata.getTradeCalender()
         self.calender = [arrow.get(i, 'YYYYMMDD') for i in stock_calender['cal_date'].unique()]

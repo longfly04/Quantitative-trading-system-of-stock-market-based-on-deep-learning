@@ -1,5 +1,6 @@
 import tushare as ts 
 import pandas as pd 
+import sys
 
 '''
 Stock类 定义股票基本参数
@@ -7,7 +8,7 @@ Trade类 定义交易的基本参数
 Company类 定义上市公司基本参数
 '''
 
-TOKEN_PATH = 'utils\\base\\token.tkn'
+TOKEN_PATH = 'quantitative_analysis_with_deep_learning\\utils\\base\\token.tkn'
 
 class Stock(object): # 股票类
     def __init__(self, 

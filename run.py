@@ -1,4 +1,5 @@
 """
+    基于深度学习预测和决策的量化交易系统
 
     数据准备：更新至截至目前最新的股票数据
     训练预测模型：模型加载上一次训练权重继续训练，预测时保证时间因果性
@@ -9,10 +10,12 @@
         2020.03.01
 """
 import json
+import os,sys
+sys.path.insert(0,'D:\\GitHub\\Quantitative-analysis-with-Deep-Learning\\quantitative_analysis_with_deep_learning')
 
-from quantatitive_analysis_with_deep_learning.preparaion import prepare_train
-from quantatitive_analysis_with_deep_learning.train_forecasting import train_forecasting
-from quantatitive_analysis_with_deep_learning.train_decision import train_decision
+from preparation import prepare_train
+from train_forecasting import train_forecasting
+from train_decision import train_decision
 
 
 def main():
