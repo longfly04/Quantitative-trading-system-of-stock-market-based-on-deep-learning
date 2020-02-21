@@ -32,13 +32,15 @@ class LSTM_Model(Model):
         self.name = name
 
     @info
-    def build_model(self, input_shape, output_shape, epoch_steps):
+    def build_model(self, input_shape, output_shape, epoch_steps=None):
         self.inputs_shape = input_shape
         self.outputs_shape = output_shape
+        self.batch_size = self.train_cfg['batch_size']
         self.model = Sequential()
-        self.epoch_steps = epoch_steps
-        assert len(epoch_steps) == 2
-        # epoch_steps : (steps_per_epoch, validation_steps)
+        if epoch_steps is not None:
+            self.epoch_steps = epoch_steps
+            assert len(epoch_steps) == 2
+            # epoch_steps : (steps_per_epoch, validation_steps)
         
         for layer in self.model_cfg['layers']:
             neurons = layer['neurons'] if 'neurons' in layer else None
@@ -81,11 +83,17 @@ class LSTM_Model(Model):
         self.model = load_model(model_file)
 
     @info
-    def train_model(self, x, y, save_model=True, end_date=None):
+    def train_model(self, x, y, val_x=None, val_y=None, save_model=True, end_date=None):
         '''
         使用普通方法训练，x,y都是batched data
         '''
         print('[Model] Training Started')
+
+        assert len(x) == len(y)
+
+        # batch_size 的整数倍，val数据有可能是未被训练的数据
+        x = x[-int(len(x) / self.batch_size) * self.batch_size :]
+        y = y[-int(len(x) / self.batch_size) * self.batch_size :]
 
         callbacks = [
             TensorBoard(log_dir=self.train_cfg['tensorboard_dir']),
@@ -95,8 +103,9 @@ class LSTM_Model(Model):
                                       x,
                                       y,
                                       epochs=self.train_cfg['epochs'],
-                                      batch_size=self.train_cfg['batch_size'],
+                                      batch_size=self.batch_size,
                                       callbacks=callbacks,
+                                      validation_data=(val_x, val_y)
                                       )
 
         epoch_loss = self.history.history['loss'][-1]
@@ -106,8 +115,8 @@ class LSTM_Model(Model):
         if save_model:
             if not os.path.exists(self.train_cfg['save_model_path']): 
                 os.makedirs(self.train_cfg['save_model_path'])
-            loss_str = str(epoch_loss)[:6] + str(epoch_val_loss)[:6]
-            acc_str = str(epoch_acc)[:6] + str(epoch_val_acc)[:6]
+            loss_str = str(epoch_loss)[:6] + '-' + str(epoch_val_loss)[:6]
+            acc_str = str(epoch_acc)[:6] + '-' + str(epoch_val_acc)[:6]
             stock_name = self.name
             save_fname = os.path.join(self.train_cfg['save_model_path'],
                                  '%s-%s-%s-%s-%s.h5' % (dt.datetime.now().strftime('%Y%m%d_%H%M%S'),
@@ -223,8 +232,7 @@ class LSTM_Model(Model):
             pred_x:特征
             save：保存选项
         """
-        batch_size = self.train_cfg['batch_size']
-        predict_type = self.pre_cfg['predict_type']
+        batch_size = self.batch_size
         
         ret = self.model.predict(pred_x[newaxis, :, :,], batch_size=batch_size, verbose=1,)
 

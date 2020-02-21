@@ -1014,14 +1014,99 @@ class DataProcessor():
 
         return x_predict
 
-    def batch_data_sliceing(self,):
+    def window_data_sliceing(self,  X, Y, date_price_index, date_range, batch_size=32):
         """
         将数据切割成窗口，再拼接为batch，便于用普通fit方法训练。
+
+        参数：
+            X,Y：输入数据和标签
+            date_price_index：时间索引
+            date_range：生成数据张量的范围，全部数据的范围
+        输出：
+            按批划分的数据batch_x, bacth_y, 用于预测的pred_x
         """
+        window_len = self.window_len
+        predict_len = self.predict_len
+
+        data_dates = date_range
+        x_train = []
+        y_train = []
+
+        # 截取窗口 
+        # x_train_shape : (N-window_len-predict_len, window_len), y_train_shape : (N-window_len-predict_len, predict_len)
+        for idx in data_dates[:-window_len - predict_len]:
+            x, y = self._windowed_data(
+                X, Y, date_price_index=date_price_index, start_date=idx)
+            x_train.append(x)
+            y_train.append(y)
+        '''
+        for idx in data_dates[-window_len - predict_len : -window_len]:
+            x = self._windowed_data(
+                X, date_price_index=date_price_index, start_date=idx)
+            x_train.append(x)
+        '''
+        assert len(x_train) == len(y_train)
+
+        pred_x = self._windowed_data(
+                X, date_price_index=date_price_index, start_date=data_dates[-window_len])
+
+        assert len(y_train) > batch_size
+
+        '''
+        batch_x = []
+        bacth_y = []
+
+        for i in range(len(y_train) - batch_size):
+            batch_x.append(x_train[i: i+batch_size])
+            bacth_y.append(y_train[i: i+batch_size])
+        '''
+
+        return np.array(x_train), np.array(y_train), pred_x
+
+    def get_window_data(self, window_x, window_y, date_price_index, date_range=None, single_window=None, batch_size=32):
+        """
+        从已经window的数据中根据索引切片，或者返回单个窗口
+        batch_x shape:(N, window_len, feature_dim), batch_y shape:(M, predict_len, feature_dim)
+
+        参数：
+            window_x, window_y：窗口化的x，y
+            date_price_index：时间索引
+            date_range：获取来自某一段时间内的窗口列表(时间段大于窗口宽度)
+            single_window：获取以某个时间点开始的1个时间窗口
+        """
+        window_len = self.window_len
+        predict_len = self.predict_len
+
+        if date_range is not None:
+            date_start_idx = date_price_index['idx'].loc[date_range[0]]
+            date_end_idx = date_price_index['idx'].loc[date_range[-1]]
+
+            assert date_end_idx - date_start_idx >= 32
+
+            date_range_x = window_x[date_start_idx: date_end_idx - batch_size]
+            date_range_y = window_y[date_start_idx: date_end_idx - batch_size]
+
+            return date_range_x, date_range_y
+
+        if single_window is not None:
+            if isinstance(single_window, str):
+                single_window_datetime = arrow.get(single_window, 'YYYYMMDD').date()
+            else:
+                single_window_datetime = single_window
+            single_window_idx = date_price_index['idx'].loc[single_window_datetime]
+            try:
+                single_window_x = window_x[single_window_idx]
+                single_window_y = window_y[single_window_idx]
+            except Exception as e:
+                print(e)
+                single_window_x = None
+
+            return single_window_x, single_window_y
+
 
     def _windowed_data(self, X, Y=None, date_price_index=None, start_date=None):
         """
-        产生单个窗口日期数据
+        产生单个窗口日期数据,从start_date开始，截取长度为window的特征，并截取window+predict_len的标签
 
         输入：
             X,Y 日期列表，当前窗口起始时间

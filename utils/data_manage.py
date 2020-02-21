@@ -72,13 +72,16 @@ class DataDownloader(object):
                         old_data = pd.read_csv(path_[0])
                         old_cal_date = str(old_data[self.date_col].iloc[-1])
                         new_start = arrow.get(old_cal_date, 'YYYYMMDD').shift(days=1).format('YYYYMMDD')
-                        dd = DailyDownloader(start_date=new_start, 
-                                             end_date=self.current_date, 
-                                             stock_code=str(v),
-                                            )
-                        additional_data = dd.downloadDaily(save=False)
-                        additional_data.to_csv(path_[0], mode='a+', header=False, index=True)
-                        print('Complete %s %s additional downloading from %s to %s.' %(k, v, old_cal_date, self.current_date))
+                        if old_cal_date != self.current_date:
+                            dd = DailyDownloader(start_date=new_start, 
+                                                 end_date=self.current_date, 
+                                                 stock_code=str(v),
+                                                 )
+                            additional_data = dd.downloadDaily(save=False)
+                            additional_data.to_csv(path_[0], mode='a+', header=False, index=True)
+                            print('Complete %s %s additional downloading from %s to %s.' %(k, v, old_cal_date, self.current_date))
+                        else:
+                            print('Stock data %s %s is up to date.' %(k, v))
                 except Exception as e:
                     print(e)
 
