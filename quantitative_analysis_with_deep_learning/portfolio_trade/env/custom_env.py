@@ -1,7 +1,7 @@
 import gym
 import gym.spaces
 
-from utils.data_manager import StockManager, PortfolioManager
+from .utils.data_manager import StockManager, PortfolioManager
 
 
 class Portfolio_Prediction_Env(gym.Env):
@@ -15,7 +15,7 @@ class Portfolio_Prediction_Env(gym.Env):
         data source：
             股票池行情Q_t                        shape:(股票池宽度N, 历史时间T, 行情列数quote_col_num)
             预测股价的step by step历史Prd_t       shape:(股票池宽度N, 预测历史时间T', 预测长度pred_len)
-            预测方差（转化为风险系数）Var_t        shape:(股票池宽度N, 预测历史时间T', 1)
+            预测均方误差（转化为风险系数）Var_t        shape:(股票池宽度N, 预测历史时间T', 1)
             资产价格P_t                          shape:(历史时间T, n_asset+1, )
             持有量历史V_t（用于计算总资产）        shape:(历史时间T, n_asset+1, )
             资产分配比例W_t（用于计算action）      shape:(历史时间T, n_asset+1, )
@@ -69,7 +69,7 @@ class Portfolio_Prediction_Env(gym.Env):
                     或者在一个episode内，最终的A_t最大。
             
         """
-       self.n_asset = n_asset
+        self.n_asset = n_asset
 
     def step(self,):
         """"""

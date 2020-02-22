@@ -63,9 +63,9 @@ def train_forecasting(config=None, save=False, calender=None, history=None, fore
     """
     assert config is not None
 
-    data_pro = DataProcessor(date_col=config['data']['date_col'],
-                             daily_quotes=config['data']['daily_quotes'],
-                             target_col=config['data']['target'])
+    data_pro = DataProcessor(   date_col=config['data']['date_col'],
+                                daily_quotes=config['data']['daily_quotes'],
+                                target_col=config['data']['target'])
     stock_list = config['data']['stock_code']
     assert len(stock_list) == len(history)
     # 对时间进行编码
@@ -101,8 +101,8 @@ def train_forecasting(config=None, save=False, calender=None, history=None, fore
         extra_features_no_nan_inf = data_pro.fill_inf(extra_features)
 
         # 超限数量级，对数压缩
-        scaled_extra_features = data_pro.convert_log(pd.DataFrame(extra_features_no_nan_inf), 
-                                                         trigger=config['data']['log_threshold'])
+        scaled_extra_features = data_pro.convert_log(   pd.DataFrame(extra_features_no_nan_inf), 
+                                                        trigger=config['data']['log_threshold'])
 
         # 获取标签列
         real_price = daily_quotes.values[:, 0]
@@ -127,9 +127,9 @@ def train_forecasting(config=None, save=False, calender=None, history=None, fore
         assert len(daily_quotes) == len(embeddings_list) == len(scaled_extra_features)
         x = np.concatenate([daily_quotes.values, embeddings_list, scaled_extra_features.values], axis=1)
         # 确定训练集和测试集时间范围，模型在测试集中迭代训练并预测
-        date_range_dict = data_pro.split_train_test_date(date_price_index=date_price_index,
-                                                         train_pct=config['preprocess']['train_pct'],
-                                                         validation_pct=config['preprocess']['validation_pct'])
+        date_range_dict = data_pro.split_train_test_date(   date_price_index=date_price_index,
+                                                            train_pct=config['preprocess']['train_pct'],
+                                                            validation_pct=config['preprocess']['validation_pct'])
         # 分解训练、验证数据的时间范围
         total_train_daterange = date_range_dict['train']
         validation_daterange = date_range_dict['validation']
@@ -221,28 +221,29 @@ def train_forecasting(config=None, save=False, calender=None, history=None, fore
         if latest_file is None:
             # 训练数据生成
             X, Y = data_pro.get_window_data(total_x_train,
-                                           total_y_train,
-                                           date_price_index,
-                                           total_train_daterange,
-                                           )
+                                            total_y_train,
+                                            date_price_index,
+                                            total_train_daterange,
+                                            )
 
-            # 验证数据从训练数据中按百分比抽样
+            # 验证数据从训练数据中按百分比抽样（这样有点失去了验证的效果）
+            # 将验证数据从未来数据中抽样，不符合时序数据的因果性
             val_idx = random.sample(range(len(X)), int(config['preprocess']['validation_pct'] * len(X)))
             val_X = np.array([X[v_i] for v_i in val_idx])
             val_Y = np.array([Y[v_i] for v_i in val_idx])
             
             # 训练并保存误差和精确度
             epoch_loss, epoch_val_loss, epoch_acc, epoch_val_acc = \
-                model.train_model(X, Y, 
-                                  val_x=val_X,
-                                  val_y=val_Y,
-                                  save_model=True, 
-                                  end_date=arrow.get(latest_date).format('YYYYMMDD'))
+                model.train_model(  X, Y, 
+                                    val_x=val_X,
+                                    val_y=val_Y,
+                                    save_model=True, 
+                                    end_date=arrow.get(latest_date).format('YYYYMMDD'))
             # 预测一步
-            pred_x, _ = data_pro.get_window_data(total_x_train,
-                                                 total_y_train,
-                                                 date_price_index,
-                                                 single_window=total_train_daterange[-batch_size])
+            pred_x, _ = data_pro.get_window_data(   total_x_train,
+                                                    total_y_train,
+                                                    date_price_index,
+                                                    single_window=total_train_daterange[-batch_size])
             result = model.predict_one_step(pred_x, )
 
             row_data = [step_by_step_train_daterange[0]] + list(result.reshape((-1,))) + [epoch_loss, epoch_val_loss, epoch_acc, epoch_val_acc]
@@ -264,10 +265,10 @@ def train_forecasting(config=None, save=False, calender=None, history=None, fore
             temp_idx = np.where(date_price_index.index.values <= date_step)
             current_step = date_price_index.index.values[:temp_idx[0][-1]]
             X, Y = data_pro.get_window_data(total_x_train,
-                                           total_y_train,
-                                           date_price_index,
-                                           current_step,
-                                           )
+                                            total_y_train,
+                                            date_price_index,
+                                            current_step,
+                                            )
 
             # 验证数据从训练数据中按百分比抽样
             val_idx = random.sample(range(len(X)), int(config['preprocess']['validation_pct'] * len(X)))
@@ -282,24 +283,22 @@ def train_forecasting(config=None, save=False, calender=None, history=None, fore
             
             # 训练并保存误差和精确度
             epoch_loss, epoch_val_loss, epoch_acc, epoch_val_acc = \
-                model.train_model(X, Y, 
-                                  val_x=val_X,
-                                  val_y=val_Y,
-                                  save_model=save_model_value, 
-                                  end_date=arrow.get(date_step).format('YYYYMMDD'))
+                model.train_model(  X, Y, 
+                                    val_x=val_X,
+                                    val_y=val_Y,
+                                    save_model=save_model_value, 
+                                    end_date=arrow.get(date_step).format('YYYYMMDD'))
             # 预测一步
-            pred_x, _ = data_pro.get_window_data(total_x_train,
-                                              total_y_train,
-                                              date_price_index,
-                                              single_window=current_step[-batch_size])
+            pred_x, _ = data_pro.get_window_data(   total_x_train,
+                                                    total_y_train,
+                                                    date_price_index,
+                                                    single_window=current_step[-batch_size])
             result = model.predict_one_step(pred_x, )
             temp_idx = np.where(date_price_index.index.values <= date_step)
             current_date = date_price_index.index.values[temp_idx[0][-1]]
             row_data = [current_date] + list(result.reshape((-1,))) + [epoch_loss, epoch_val_loss, epoch_acc, epoch_val_acc]
             # 将一次预测的结果存入
             results_df = add_to_df(results_df, col_names, row_data)
-            
-            year_start_day = pd.date
 
             # 每训练一年（250个数据），则保存一次数据
             training_idx = np.where(step_by_step_train_daterange <= current_date)
@@ -308,12 +307,15 @@ def train_forecasting(config=None, save=False, calender=None, history=None, fore
                 save_path = os.path.join(config['prediction']['save_result_path'], now + '-' + idx + '-' + current_date.strftime('%Y%m%d') + '.csv')
                 results_df.to_csv(save_path)
 
-            print('Prediction of %s is saved to file.' %current_date.strftime("%Y%m%d"))
+            print('[Predict] Prediction of %s is saved to file.' %current_date.strftime("%Y%m%d"))
 
-        now = arrow.now().format('YYYYMMDD_HHmmss')
-        save_path = os.path.join(config['prediction']['save_result_path'], now + '-' + idx + '-' + step_by_step_train_daterange[-1].strftime('%Y%m%d') + '.csv')
-        results_df.to_csv(save_path)
+            # 最后一次训练、保存权重，保存训练结果
+            if save_model_value:
+                now = arrow.now().format('YYYYMMDD_HHmmss')
+                save_path = os.path.join(config['prediction']['save_result_path'], now + '-' + idx + '-' + step_by_step_train_daterange[-1].strftime('%Y%m%d') + '.csv')
+                results_df.to_csv(save_path)
 
+        # 可视化部分，还没有实现
         if config['visualization']['draw_graph']:
             # 预测结果的长度是标签长度与预测步数的乘积
             predict_len = output_shape[0] * config['prediction']['predict_steps']
@@ -325,4 +327,7 @@ def train_forecasting(config=None, save=False, calender=None, history=None, fore
             data_vis = DataVisualiser(config, name=stock_name)
             data_vis.plot_prediction(date_range_dict=date_range_dict, prediction=real_results, date_price_index=date_price_index)
 
-    return None
+        # 预测结果数据的字典
+        predict_results_dict[idx] = results_df
+    
+    return predict_results_dict
