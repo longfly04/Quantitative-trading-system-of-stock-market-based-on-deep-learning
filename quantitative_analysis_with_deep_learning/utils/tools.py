@@ -126,7 +126,9 @@ def add_to_df(df:pd.DataFrame, cols, row_data):
     data = {}
     for item in zip(cols, row_data):
         data[item[0]] = item[1]
-    new_df = pd.DataFrame(data=data, index=row_data[0])
+
+    
+    new_df = pd.DataFrame(data=data, index=[0])
     new_df = pd.concat([df, new_df], axis=0, ignore_index=True)
 
     return new_df
