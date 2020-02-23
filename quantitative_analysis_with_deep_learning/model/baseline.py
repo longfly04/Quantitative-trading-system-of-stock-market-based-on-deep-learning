@@ -104,7 +104,7 @@ class LSTM_Model(Model):
                                       y,
                                       epochs=self.train_cfg['epochs'],
                                       batch_size=self.batch_size,
-                                      callbacks=callbacks,
+                                      #callbacks=callbacks,
                                       validation_data=(val_x, val_y)
                                       )
 
@@ -144,7 +144,7 @@ class LSTM_Model(Model):
                                                 xy_gen,
                                                 steps_per_epoch=self.epoch_steps[0],
                                                 epochs=self.train_cfg['epochs'],
-                                                callbacks=callbacks,
+                                                #callbacks=callbacks,
                                                 validation_data=val_gen,
                                                 validation_steps=self.epoch_steps[1],
                                                 validation_freq=self.train_cfg['validation_freq'],

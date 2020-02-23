@@ -210,15 +210,7 @@ class StockManager(object):
         quote_index = self.quote_col[0]
         quote_list = []
         assert len(self.stock_pool) == len(self.stock_data_list)
-        '''
-        # 行情数据延展为二维拼接
-        for i in range(len(self.stock_data_list)):
-            data_quote = self.stock_data_list[i][quote_columns]
-            data_quote = data_quote.rename(columns=lambda x: x + '_' + self.stock_pool[i])
-            quote_list.append(data_quote)
 
-        total_quote = pd.concat(quote_list, axis=1, join='outer', ignore_index=False)
-        '''
         for i in range(len(self.stock_data_list)):
             data_quote = self.stock_data_list[i][quote_columns].values
             quote_list.append(data_quote)
@@ -226,35 +218,5 @@ class StockManager(object):
         print('Total quote shape is ', total_quote.shape )
         return total_quote
 
-
-
-class PortfolioManager(object):
-    """
-    资产管理器，提供Gym环境的资产向量，回测情况下，通过行情历史计算，实盘情况下，通过交易接口获取账户信息
-    """
-    def __init__(self, config):
-        self.data_cfg = config['data']
-        self.quote_columns = self.data_cfg['daily_quotes'] # 行情数据列，传递给Env
-        self.stock_list = self.data_cfg['stock_code'] # 从股票池中选择进行投资的股票
-
-    def _step(self,):
-        """"""
-
-    def _reset(self,):
-        """"""
-
-    def load_quote(self, total_quote=None, calender=None, history_data=None,):
-        """
-        从本地数据文件获取最新的股票行情
-        """
-        # 从data manager获得的历史数据、交易日历和行情数据
-        self.total_quote = total_quote
-        self.calender = calender
-        self.history_data = history_data
-
-    def load_trade(self,):
-        """
-        获取成交的订单情况，并更新资产
-        """
 
 

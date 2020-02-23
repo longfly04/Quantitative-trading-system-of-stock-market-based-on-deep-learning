@@ -71,7 +71,7 @@ def train_forecasting(config=None, save=False, calender=None, history=None, fore
     # 对时间进行编码
     (date_list, embeddings_list) = data_pro.encode_date_embeddings(calender)
 
-    # 预测结果的字典：索引、涨跌、方差
+    # 预测结果的字典
     predict_results_dict = {}
 
     # 对投资标的的历史数据进行建模
@@ -327,7 +327,12 @@ def train_forecasting(config=None, save=False, calender=None, history=None, fore
             data_vis = DataVisualiser(config, name=stock_name)
             data_vis.plot_prediction(date_range_dict=date_range_dict, prediction=real_results, date_price_index=date_price_index)
 
-        # 预测结果数据的字典
+        # 预测结果数据的字典，删除无用列
+        try:
+            results_df = results_df.drop(columns=[x for x in results_df.columns if x.startswith('Unnamed')])
+        except Exception as e:
+            pass
+
         predict_results_dict[idx] = results_df
     
     return predict_results_dict
