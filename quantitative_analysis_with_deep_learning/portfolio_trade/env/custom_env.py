@@ -26,7 +26,7 @@
                 Dict{
                     Quote: Box(shape=(n_asset, obs_window_length, 行情列数quote_col_num)),
                     Pred_price:Box(shape=(n_asset, 预测长度pred_len)),
-                    Pred_var:Box(shape=(n_asset, )),
+                    Pred_var:Box(shape=(n_asset, 准确率和损失acc+loss)),
                     Portfolio_price：Box(shape=(obs_window_length, n_asset+1, )),
                     Portfolio_volumns:Box(shape=(obs_window_length, n_asset+1, )),
                     Portfolio_weight:Box(shape=(obs_window_length, n_asset+1, )),
@@ -62,22 +62,97 @@
             reward：论文中使用log比例，也有分为浮动收益和固定收益，我们总体上希望 log(A_t+1/A_0) 最大
                     或者在一个episode内，最终的A_t最大。
 
-
     By LongFly
 
 """
 
 import gym
 import gym.spaces
+import pandas as pd 
+import numpy as np 
+import arrow
 
-from utils.data_manage import StockManager
+from utils.data_process import DataProcessor 
 
 
-def order_process_sim(P0, P1, W0, W1, V0, stock_quote):
+class QuotationManager(object):
     """
-    处理订单（模拟环境）
-
+    股价行情管理器，关注多资产的股价量价信息
     """
+    def __init__(self,  config, 
+                        calender, 
+                        stock_history, 
+                        window_len=32,
+                        start_trade_date='20140901'
+                        ):
+        """
+        参数：
+            config, 配置文件
+            calender, 交易日历
+            stock_history, 历史数据
+            window_len, 历史数据窗口
+        """
+        self.config = config
+        self.calender = calender
+        self.stock_history = stock_history
+        self.window_len = window_len
+        self.start_trade_date = arrow.get(start_trade_date, 'YYYYMMDD').date()
+
+        self.stock_list = config['data']['stock_code']
+        self.quotation_col = config['data']['daily_quotes']
+        self.date_col = config['data']['date_col']
+        self.target_col = config['data']['target']
+        self.train_pct = config['preprocess']['train_pct']
+
+        assert len(self.stock_list) == len(self.stock_history)
+
+        self.data_pro = DataProcessor(  date_col=self.date_col,
+                                        daily_quotes=self.quotation_col,
+                                        target_col=self.target_col,
+                                        window_len=self.window_len,
+                                        pct_scale=config['preprocess']['pct_scale'])
+        # 对时间进行编码
+        (date_list, self.embeddings_list) = self.data_pro.encode_date_embeddings(calender)
+        self.date_index = pd.to_datetime(date_list, format='%Y%m%d').date
+
+        # 确定决策训练的时间范围
+        self.decision_daterange = self.date_index[self.date_index >= self.start_trade_date]
+        
+        # 定义存放行情信息的字典
+        self.stock_quotation = {}
+        for name, data in zip(self.stock_list, self.stock_history):
+            # 计算日行情
+            daily_quotes = self.data_pro.cal_daily_quotes(data)
+            daily_quotes['idx'] = range(len(daily_quotes))
+            try:
+                daily_quotes = daily_quotes.set_index(self.date_index, drop=True)
+            except Exception as e:
+                print(e)
+            self.stock_quotation[name] = daily_quotes
+
+        self.reset()
+        
+    def _step(self,):
+        """
+        向前迭代一步，产生一个window的数据窗口
+        """
+
+
+    def reset(self,):
+        """"""
+        reset_date = self.decision_daterange[0]
+        quotation = self.get_quotation(reset_date)
+
+        return quotation
+
+
+    def get_quotation(self, date):
+        """
+        获取date，股价行情
+        """
+        for k,v in self.stock_quotation.items():
+            pass
+    
 
 
 class PortfolioManager(object):
@@ -88,9 +163,9 @@ class PortfolioManager(object):
                         calender, 
                         stock_history, 
                         init_asset=100000,
-                        tax_rate=0.001,
+                        tax_rate=0.0025,
                         start_trade_date='20140901',
-                        window_len=22,
+                        window_len=32,
                         ):
         """
         参数：
@@ -115,12 +190,12 @@ class PortfolioManager(object):
         self.reset()
 
 
-    def _step(self, P1, W1, trade_date):
+    def _step(self, O1, W1, trade_date):
         """
         每个交易期的资产量变化，一步迭代更新状态
 
         参数：
-            P1,W1：agent计算出的价格向量和分配向量
+            O1,W1：agent计算出的报价和分配向量
             trade_date:交易日期
         """
         P0 = self.P0
@@ -128,9 +203,8 @@ class PortfolioManager(object):
         A0 = self.A0
         W0 = self.W0
 
-
-
-
+        # 订单计算和处理，交易期内视为股价无变化
+        
 
 
 
@@ -148,19 +222,12 @@ class PortfolioManager(object):
         # 定义资产分配比例
         self.W0 = self.A0 / self.A0.sum()
 
-    def load_quote(self, total_quote=None, calender=None, history_data=None,):
-        """
-        从本地数据文件获取最新的股票行情
-        """
-        # 从data manager获得的历史数据、交易日历和行情数据
-        self.total_quote = total_quote
-        self.calender = calender
-        self.history_data = history_data
 
-    def load_trade(self,):
+    def save_history(self, save=True):
         """
-        获取成交的订单情况，并更新资产
+        保存资产组合变化历史数据
         """
+
 
 
 
@@ -169,7 +236,13 @@ class Portfolio_Prediction_Env(gym.Env):
     """
     基于股市预测的组合资产管理模拟环境
     """
-    def __init__(self, config, calender, stock_history, prediction_history,):
+    def __init__(self, config, 
+                    calender, 
+                    stock_history, 
+                    window_len, 
+                    prediction_history, 
+                    start_trade_date='20140901',
+                    save=True):
         """
         参数：
             config, 配置文件
@@ -182,7 +255,24 @@ class Portfolio_Prediction_Env(gym.Env):
             reset,
             
         """
-        self.n_asset = n_asset
+        self.config = config
+        self.calender = calender
+        self.stock_history = stock_history
+        self.prediction_history = prediction_history
+        self.window_len =window_len
+        self.start_trade_date = start_trade_date
+        self.save = save
+
+        self.quotation_mgr = QuotationManager(  config=config,
+                                                calender=calender,
+                                                stock_history=stock_history,
+                                                window_len=window_len)
+        self.portfolio_mgr = PortfolioManager(  config=config,
+                                                stock_history=stock_history,
+                                                calender=calender,
+                                                window_len=window_len,
+                                                save=save)
+
 
 
     def step(self,):

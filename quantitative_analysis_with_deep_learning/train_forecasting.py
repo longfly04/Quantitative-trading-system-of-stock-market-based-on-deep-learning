@@ -41,8 +41,6 @@ import arrow
 import random
 from sklearn.decomposition import PCA
 
-from utils.data_process import DataProcessor
-from utils.order_process import OrderProcessor, TradeSimulator
 from utils.data_process import DataProcessor, DataVisualiser
 
 from model.baseline import LSTM_Model
@@ -228,10 +226,27 @@ def train_forecasting(config=None, save=False, calender=None, history=None, fore
 
             # 验证数据从训练数据中按百分比抽样（这样有点失去了验证的效果）
             # 将验证数据从未来数据中抽样，不符合时序数据的因果性
-            val_idx = random.sample(range(len(X)), int(config['preprocess']['validation_pct'] * len(X)))
-            val_X = np.array([X[v_i] for v_i in val_idx])
-            val_Y = np.array([Y[v_i] for v_i in val_idx])
-            
+            # val_idx = random.sample(range(len(X)), int(config['preprocess']['validation_pct'] * len(X)))
+            # val_X = np.array([X[v_i] for v_i in val_idx])
+            # val_Y = np.array([Y[v_i] for v_i in val_idx])
+
+            # 验证集数据从未被训练的数据中获取
+            # 训练集中，最后一个预测窗口所覆盖的len(predict_len)个数据未被训练，可用来验证模型时变性
+            val_X = []
+            val_Y = []
+            val_idx_start = date_price_index['idx'].loc[total_train_daterange[-1]] + 1
+            for i in range(len(config['preprocess']['predict_len'])):
+                val_X_i, val_Y_i = data_pro.get_window_data( total_x_train,
+                                                    total_y_train,
+                                                    date_price_index,
+                                                    single_window=date_price_index['date'].iloc[val_idx_start + i],
+                                                    )
+                val_X.append(val_X_i)
+                val_Y.append(val_Y_i)
+
+            val_X = np.array(val_X)
+            val_Y = np.array(val_Y)
+
             # 训练并保存误差和精确度
             epoch_loss, epoch_val_loss, epoch_acc, epoch_val_acc = \
                 model.train_model(  X, Y, 
@@ -271,9 +286,26 @@ def train_forecasting(config=None, save=False, calender=None, history=None, fore
                                             )
 
             # 验证数据从训练数据中按百分比抽样
-            val_idx = random.sample(range(len(X)), int(config['preprocess']['validation_pct'] * len(X)))
-            val_X = np.array([X[v_i] for v_i in val_idx])
-            val_Y = np.array([Y[v_i] for v_i in val_idx])
+            # val_idx = random.sample(range(len(X)), int(config['preprocess']['validation_pct'] * len(X)))
+            # val_X = np.array([X[v_i] for v_i in val_idx])
+            # val_Y = np.array([Y[v_i] for v_i in val_idx])
+
+            # 验证集数据从未被训练的数据中获取
+            # 训练集中，最后一个预测窗口所覆盖的len(predict_len)个数据未被训练，可用来验证模型时变性
+            val_X = []
+            val_Y = []
+            val_idx_start = date_price_index['idx'].loc[date_step] + 1
+            for i in range(len(config['preprocess']['predict_len'])):
+                val_X_i, val_Y_i = data_pro.get_window_data( total_x_train,
+                                                    total_y_train,
+                                                    date_price_index,
+                                                    single_window=date_price_index['date'].iloc[val_idx_start + i],
+                                                    )
+                val_X.append(val_X_i)
+                val_Y.append(val_Y_i)
+
+            val_X = np.array(val_X)
+            val_Y = np.array(val_Y)
 
             # 如果是最后一次训练，需要保存权重
             if date_step == step_by_step_train_daterange[-1]:

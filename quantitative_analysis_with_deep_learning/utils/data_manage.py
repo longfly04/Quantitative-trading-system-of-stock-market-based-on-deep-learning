@@ -3,8 +3,6 @@ import pandas as pd
 import datetime
 import arrow
 import os
-from vnpy.trader.constant import *
-from vnpy.trader.object import *
 
 from utils.tushare_util import DailyDownloader
 from utils.base.stock import Parameters, StockData
@@ -23,7 +21,7 @@ class DataDownloader(object):
         """
         self.data_path = data_path
         self.stock_list_file = stock_list_file
-        self.current_date = datetime.strftime(datetime.now(), format="%Y%m%d")
+        self.current_date = arrow.now().format('YYYYMMDD')
 
     def download_stock(self, download_mode:str, start_date:str, date_col):
         """

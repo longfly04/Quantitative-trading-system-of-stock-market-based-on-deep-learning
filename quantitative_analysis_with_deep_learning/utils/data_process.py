@@ -759,7 +759,7 @@ class DataProcessor():
         pass
 
     @info
-    def cal_daily_quotes(self, data):
+    def cal_daily_quotes(self, data) -> pd.DataFrame :
         """
         计算每日行情，处理价和量，保留开盘、最高、最低的差价和百分比，以及昨收和今收的差价和百分比
 
@@ -913,11 +913,11 @@ class DataProcessor():
         return pca_data
 
     @info
-    def split_train_test_date(self, 
-                              date_price_index,
-                              train_pct=0.5,
-                              validation_pct=0.1,
-                              ):
+    def split_train_test_date(  self, 
+                                date_price_index,
+                                train_pct=0.5,
+                                validation_pct=0.1,
+                                ):
         """
         将日期序列按照配置文件的比例关系划分训练集、验证集、测试集
 

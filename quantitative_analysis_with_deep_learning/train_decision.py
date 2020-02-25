@@ -1,9 +1,15 @@
 import numpy as np 
+import pandas as pd 
 
-from portfolio_trade.env.custom_env import Portfolio_Prediction_Env
+import gym
+from stable_baselines import PPO2
+from stable_baselines.common.vec_env import DummyVecEnv
+from stable_baselines.common.policies import MlpPolicy
+
+from portfolio_trade.env.custom_env import Portfolio_Prediction_Env, QuotationManager, PortfolioManager
 
 
-def train_decision(config=None, save=False, calender=None, history=None, all_quotes=None, predict_results_dict=None):
+def train_decision(config=None, save=False, load=False, calender=None, history=None, predict_results_dict=None):
     """
     训练决策模型，从数据库读取数据并进行决策训练
 
@@ -16,6 +22,31 @@ def train_decision(config=None, save=False, calender=None, history=None, all_quo
         predict_results_dict：预测结果信息
     """
 
+    env = Portfolio_Prediction_Env( config=config,
+                                    calender=calender, 
+                                    stock_history=history, 
+                                    window_len=32, 
+                                    prediction_history=predict_results_dict,
+                                    save=save)
+
+    if load:
+        model = DDPG.load('DDPG')
+    else:
+        model = DDPG(   policy=MlpPolicy,
+                        env=env,
+                        )
+
+    model.learn(total_timesteps=10000,)
+
+    obs = env.reset()
+
+    for i in range(1000):
+        action, _states = model.predict(obs)
+        obs, reward, done, info = env.step(action)
+        env.render()
+
+    env.save()
+    env.close()
 
 
 def order_process_trade():
