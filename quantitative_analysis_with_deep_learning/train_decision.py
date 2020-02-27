@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd 
 
 import gym
-from stable_baselines import PPO2
+from stable_baselines import PPO2, DDPG
 from stable_baselines.common.vec_env import DummyVecEnv
 from stable_baselines.common.policies import MlpPolicy
 

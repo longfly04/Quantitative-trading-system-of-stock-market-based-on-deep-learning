@@ -133,7 +133,7 @@ def train_forecasting(config=None, save=False, calender=None, history=None, fore
         validation_daterange = date_range_dict['validation']
         step_by_step_train_daterange = date_range_dict['predict']
 
-        # 将数据特征和标签按照batch单位切分
+        # 将数据特征和标签按照window_len, predict_len切分
         total_x_train, total_y_train, _ = data_pro.window_data_sliceing(x, y, date_price_index, date_price_index.index.values) 
         """
         定义参数文件命名方式：
@@ -235,7 +235,7 @@ def train_forecasting(config=None, save=False, calender=None, history=None, fore
             val_X = []
             val_Y = []
             val_idx_start = date_price_index['idx'].loc[total_train_daterange[-1]] + 1
-            for i in range(len(config['preprocess']['predict_len'])):
+            for i in range(config['preprocess']['predict_len']):
                 val_X_i, val_Y_i = data_pro.get_window_data( total_x_train,
                                                     total_y_train,
                                                     date_price_index,
@@ -295,12 +295,17 @@ def train_forecasting(config=None, save=False, calender=None, history=None, fore
             val_X = []
             val_Y = []
             val_idx_start = date_price_index['idx'].loc[date_step] + 1
-            for i in range(len(config['preprocess']['predict_len'])):
+            for i in range(config['preprocess']['predict_len']):
+                
                 val_X_i, val_Y_i = data_pro.get_window_data( total_x_train,
                                                     total_y_train,
                                                     date_price_index,
                                                     single_window=date_price_index['date'].iloc[val_idx_start + i],
                                                     )
+                
+                if val_Y_i is None:
+                    # 如果是最后一次训练，则未来的验证集数据的标签无法获得
+                    val_Y_i = [0, 0, 0, 0, 0]
                 val_X.append(val_X_i)
                 val_Y.append(val_Y_i)
 
@@ -320,7 +325,8 @@ def train_forecasting(config=None, save=False, calender=None, history=None, fore
                                     val_y=val_Y,
                                     save_model=save_model_value, 
                                     end_date=arrow.get(date_step).format('YYYYMMDD'))
-            # 预测一步
+            
+            # 预测一步，预测一步使用的窗口数据是否是最后一个窗口？
             pred_x, _ = data_pro.get_window_data(   total_x_train,
                                                     total_y_train,
                                                     date_price_index,

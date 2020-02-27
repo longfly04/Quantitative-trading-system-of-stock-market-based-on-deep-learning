@@ -190,12 +190,12 @@ class PortfolioManager(object):
         self.reset()
 
 
-    def _step(self, O1, W1, trade_date):
+    def _step(self, offer, W1, trade_date):
         """
         每个交易期的资产量变化，一步迭代更新状态
 
         参数：
-            O1,W1：agent计算出的报价和分配向量
+            offer,W1：agent计算出的报价向量和分配向量
             trade_date:交易日期
         """
         P0 = self.P0

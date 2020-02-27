@@ -38,7 +38,7 @@ class DataProcessor():
                  norm_type='window',
                  predict_steps=5,
                  pca_n_comp=100,
-                ):
+                 ):
         """
             参数：
                 date_col：日期列
@@ -263,17 +263,17 @@ class DataProcessor():
         # 剩下的空值用0填充
         return data_new
 
-    def fill_nan(self, dataframe:pd.DataFrame, value=0.001):
+    def fill_nan(self, dataframe: pd.DataFrame, value=0.001):
         """
         填充空值，支持对DataFrame填充
         """
         data = dataframe
-        print('Filled %d Nans .' %(data.isnull().sum().sum()))
+        print('Filled %d Nans .' % (data.isnull().sum().sum()))
         data.fillna(axis=0, method='ffill', inplace=True)
         data.fillna(value, inplace=True)
         return data
 
-    def fill_inf(self, array:np.array):
+    def fill_inf(self, array: np.array):
         """
         处理数据集的无穷值，用固定值填充，或者用0
         """
@@ -304,8 +304,7 @@ class DataProcessor():
 
         return a
 
-
-    def convert_log(self, dataframe:pd.DataFrame, trigger=100):
+    def convert_log(self, dataframe: pd.DataFrame, trigger=100):
         """
         对数值超过触发门限的列 取对数，对负数取绝对值再取对数，结果再取负
         """
@@ -429,7 +428,8 @@ class DataProcessor():
         dataset_tech['ma7'] = dataset_tech['close'].rolling(window=7).mean()
         dataset_tech['ma21'] = dataset_tech['close'].rolling(window=21).mean()
         dataset_tech['ema'] = dataset_tech['close'].ewm(com=0.5).mean()
-        dataset_tech['momentum'] = dataset_tech['close'] - dataset_tech['close'].shift(1)
+        dataset_tech['momentum'] = dataset_tech['close'] - \
+            dataset_tech['close'].shift(1)
 
         ## test ##
         # print(dataset_tech.columns.values)
@@ -438,7 +438,8 @@ class DataProcessor():
             # plot_dataset = dataset_tech
             plot_dataset = dataset_tech.iloc[-last_days:, :]
             shape_0 = plot_dataset.shape[0]
-            x = [dt.datetime.strptime(i,'%Y%m%d') for i in date_index][-last_days:]
+            x = [dt.datetime.strptime(i, '%Y%m%d')
+                 for i in date_index][-last_days:]
             x = pd.DatetimeIndex(x)
             colors = self._choose_color(10)
             plot_dataset = plot_dataset.set_index(x)
@@ -759,7 +760,7 @@ class DataProcessor():
         pass
 
     @info
-    def cal_daily_quotes(self, data) -> pd.DataFrame :
+    def cal_daily_quotes(self, data) -> pd.DataFrame:
         """
         计算每日行情，处理价和量，保留开盘、最高、最低的差价和百分比，以及昨收和今收的差价和百分比
 
@@ -837,7 +838,7 @@ class DataProcessor():
             assert self.predict_len == len(output)
         else:
             assert self.predict_len * \
-            self.predict_steps == len(output)
+                self.predict_steps == len(output)
 
         current_price = float(current_price)
         if self.predict_type == 'real':
@@ -872,9 +873,11 @@ class DataProcessor():
         """
         将行情信息和其他信息分开，并移除日期列，用于降维
         """
-        other_features_col = [x for x in data.columns.values if x not in self.daily_quotes]
+        other_features_col = [
+            x for x in data.columns.values if x not in self.daily_quotes]
         # 删除自动索引列和日期列
-        del_col = [x for x in other_features_col if x.endswith('date') or x.startswith('Unnamed') or x.startswith(self.date_col)]
+        del_col = [x for x in other_features_col if x.endswith(
+            'date') or x.startswith('Unnamed') or x.startswith(self.date_col)]
         for d in del_col:
             try:
                 other_features_col.remove(d)
@@ -903,7 +906,6 @@ class DataProcessor():
 
         return full_data_
 
-
     def principal_component_analysis(self, data, pca_dim):
         """
         指定维度进行pca降维，用于对窗口数据的降维，
@@ -913,11 +915,11 @@ class DataProcessor():
         return pca_data
 
     @info
-    def split_train_test_date(  self, 
-                                date_price_index,
-                                train_pct=0.5,
-                                validation_pct=0.1,
-                                ):
+    def split_train_test_date(self,
+                              date_price_index,
+                              train_pct=0.5,
+                              validation_pct=0.1,
+                              ):
         """
         将日期序列按照配置文件的比例关系划分训练集、验证集、测试集
 
@@ -944,7 +946,6 @@ class DataProcessor():
                                 ('predict', predict_date.index.values)])
 
         return date_range_dict
-
 
     def batch_data_generator(self, X, Y, date_price_index, date_range, gen_type='train', batch_size=32):
         """
@@ -1032,23 +1033,24 @@ class DataProcessor():
         x_train = []
         y_train = []
 
-        # 截取窗口 
-        # x_train_shape : (N-window_len-predict_len, window_len), y_train_shape : (N-window_len-predict_len, predict_len)
+        # 截取窗口
+        # x_train_shape : (N-window_len, window_len), y_train_shape : (N-window_len-predict_len, predict_len)
         for idx in data_dates[:-window_len - predict_len]:
             x, y = self._windowed_data(
                 X, Y, date_price_index=date_price_index, start_date=idx)
             x_train.append(x)
             y_train.append(y)
-        '''
-        for idx in data_dates[-window_len - predict_len : -window_len]:
+
+        # 没有标签的数据特征，用于预测
+        for idx in data_dates[-window_len - predict_len: -window_len]:
             x = self._windowed_data(
                 X, date_price_index=date_price_index, start_date=idx)
             x_train.append(x)
-        '''
-        assert len(x_train) == len(y_train)
+
+        assert len(x_train) == len(y_train) + predict_len
 
         pred_x = self._windowed_data(
-                X, date_price_index=date_price_index, start_date=data_dates[-window_len])
+            X, date_price_index=date_price_index, start_date=data_dates[-window_len])
 
         assert len(y_train) > batch_size
 
@@ -1090,23 +1092,27 @@ class DataProcessor():
 
         if single_window is not None:
             if isinstance(single_window, str):
-                single_window_datetime = arrow.get(single_window, 'YYYYMMDD').date()
+                single_window_datetime = arrow.get(
+                    single_window, 'YYYYMMDD').date()
             else:
                 single_window_datetime = single_window
             single_window_idx = date_price_index['idx'].loc[single_window_datetime]
             try:
                 single_window_x = window_x[single_window_idx]
-                single_window_y = window_y[single_window_idx]
             except Exception as e:
                 print(e)
                 single_window_x = None
+            try:
+                single_window_y = window_y[single_window_idx]
+            except Exception as e:
+                print(e)
+                single_window_y = None
 
             return single_window_x, single_window_y
 
-
     def _windowed_data(self, X, Y=None, date_price_index=None, start_date=None):
         """
-        产生单个窗口日期数据,从start_date开始，截取长度为window的特征，并截取window+predict_len的标签
+        产生单个窗口日期数据,从start_date开始，截取长度为window的特征，并截取索引在window+predict_len的标签
 
         输入：
             X,Y 日期列表，当前窗口起始时间
