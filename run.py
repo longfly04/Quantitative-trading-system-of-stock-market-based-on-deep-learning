@@ -28,7 +28,7 @@ def main():
     predict_results_dict = train_forecasting(   config, 
                                                 calender=calender, 
                                                 history=history, 
-                                                forecasting_deadline='20150110')
+                                                forecasting_deadline='20150201')
     # 训练决策模型，初始化资金，得到
     train_decision( config=config,
                     save=True, 

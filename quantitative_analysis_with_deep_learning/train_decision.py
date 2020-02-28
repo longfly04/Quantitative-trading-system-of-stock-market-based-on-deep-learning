@@ -1,5 +1,6 @@
 import numpy as np 
 import pandas as pd 
+import arrow
 
 import gym
 from stable_baselines import PPO2, DDPG
@@ -21,12 +22,18 @@ def train_decision(config=None, save=False, load=False, calender=None, history=N
         all_quotes:拼接之后的行情信息
         predict_results_dict：预测结果信息
     """
+    # 首先处理预测数据中字符串日期
+    predict_dict = {}
+    for k,v in predict_results_dict.items():
+        assert isinstance(v['predict_date'].iloc[0], str)
+        tmp = v['predict_date'].apply(lambda x: arrow.get(x, 'YYYY-MM-DD').date())
+        predict_dict[k] = v.rename(index=tmp)
 
     env = Portfolio_Prediction_Env( config=config,
                                     calender=calender, 
                                     stock_history=history, 
                                     window_len=32, 
-                                    prediction_history=predict_results_dict,
+                                    prediction_history=predict_dict,
                                     save=save)
 
     if load:

@@ -236,11 +236,11 @@ def train_forecasting(config=None, save=False, calender=None, history=None, fore
             val_Y = []
             val_idx_start = date_price_index['idx'].loc[total_train_daterange[-1]] + 1
             for i in range(config['preprocess']['predict_len']):
-                val_X_i, val_Y_i = data_pro.get_window_data( total_x_train,
-                                                    total_y_train,
-                                                    date_price_index,
-                                                    single_window=date_price_index['date'].iloc[val_idx_start + i],
-                                                    )
+                val_X_i, val_Y_i = data_pro.get_window_data(    total_x_train,
+                                                                total_y_train,
+                                                                date_price_index,
+                                                                single_window=date_price_index['date'].iloc[val_idx_start + i],
+                                                                )
                 val_X.append(val_X_i)
                 val_Y.append(val_Y_i)
 
@@ -272,7 +272,7 @@ def train_forecasting(config=None, save=False, calender=None, history=None, fore
         for date_step in step_by_step_train_daterange:
             try:
                 recent_date = results_df['predict_date'].iloc[-1]
-                if recent_date == date_step:
+                if arrow.get(recent_date, 'YYYY-MM-DD').date() == date_step:
                     continue
             except Exception as e:
                 pass

@@ -67,10 +67,12 @@
 """
 
 import gym
-import gym.spaces
+from gym.spaces import Box, Dict
 import pandas as pd 
 import numpy as np 
 import arrow
+
+
 
 from utils.data_process import DataProcessor 
 
@@ -83,7 +85,8 @@ class QuotationManager(object):
                         calender, 
                         stock_history, 
                         window_len=32,
-                        start_trade_date='20140901'
+                        start_trade_date=None,
+                        prediction_history=None,
                         ):
         """
         参数：
@@ -91,18 +94,27 @@ class QuotationManager(object):
             calender, 交易日历
             stock_history, 历史数据
             window_len, 历史数据窗口
+
+            predict_history,预测的历史与行情数据相同的处理方式
         """
         self.config = config
         self.calender = calender
         self.stock_history = stock_history
         self.window_len = window_len
-        self.start_trade_date = arrow.get(start_trade_date, 'YYYYMMDD').date()
-
+        self.start_trade_date = start_trade_date
         self.stock_list = config['data']['stock_code']
         self.quotation_col = config['data']['daily_quotes']
         self.date_col = config['data']['date_col']
         self.target_col = config['data']['target']
         self.train_pct = config['preprocess']['train_pct']
+        
+        # prediction数据和列名
+        self.prediction_history = prediction_history
+        col_names = []
+        for i in range(config['preprocess']['predict_len']):
+            col_name = 'pred_' + str(i)
+            col_names.append(col_name)
+        self.prediction_col = col_names + ['epoch_loss', 'epoch_val_loss', 'epoch_acc', 'epoch_val_acc']
 
         assert len(self.stock_list) == len(self.stock_history)
 
@@ -115,7 +127,7 @@ class QuotationManager(object):
         (date_list, self.embeddings_list) = self.data_pro.encode_date_embeddings(calender)
         self.date_index = pd.to_datetime(date_list, format='%Y%m%d').date
 
-        # 确定决策训练的时间范围
+        # 确定决策训练的时间范围，（数据窗口范围是从decision_daterange开始，训练从decision_daterange[window_len:]开始）
         self.decision_daterange = self.date_index[self.date_index >= self.start_trade_date]
         
         # 定义存放行情信息的字典
@@ -132,27 +144,68 @@ class QuotationManager(object):
 
         self.reset()
         
-    def _step(self,):
+    def _step(self, step_date,):
         """
-        向前迭代一步，产生一个window的数据窗口
+        向前迭代一步，按照step date产生一个window的数据窗口
+
+        参数：
+            step_date,迭代步的日期索引
         """
+        self.current_date = step_date
+        idx = np.where(self.decision_daterange >= step_date)
+        assert idx[0] >= self.window_len
+
+        quotation = self.get_window_quotation(self.decision_daterange[idx[0] - self.window_len])
+        prediction = self.get_window_prediction(self.decision_daterange[idx[0] - self.window_len])
+
+        return quotation, prediction
 
 
-    def reset(self,):
+    def _reset(self,):
         """"""
-        reset_date = self.decision_daterange[0]
-        quotation = self.get_quotation(reset_date)
+        # 决策日期为行情数据窗口起点, + window_len为决策日期起点
+        self.current_date = self.decision_daterange[self.window_len]
+        quotation = self.get_window_quotation(self.decision_daterange[0])
+        prediction = self.get_window_prediction(self.decision_daterange[0])
 
-        return quotation
+        self.quotation_shape = quotation.shape
+        self.prdiction_shape = prediction.shape
+
+        return quotation, prediction
 
 
-    def get_quotation(self, date):
+    def get_window_quotation(self, date):
         """
-        获取date，股价行情
+        获取股价行情，时间范围：[date, date + window_len]
         """
+        window_quotation = []
         for k,v in self.stock_quotation.items():
-            pass
+            try:
+                quote = v[v.index >= date].iloc[:self.window_len]
+            except Exception as e:
+                print(e)
+
+            window_quotation.append(quote.values)
+
+        return np.concatenate(window_quotation, axis=1)
     
+    def get_window_prediction(self, date):
+        """
+        获取预测的历史，时间范围：[date, date + window_len]
+        """
+        window_prediction = []
+        for k,v in self.prediction_history.items():
+            try:
+                # 获取历史预测数据，宽度为window_len
+                window_his = v[v.index >= date].iloc[:self.window_len]
+            except Exception as e:
+                print(e)
+
+            # 将有效数据列放入window中
+            window_prediction.append(window_his[self.prediction_col].values)
+        
+        # 横向拼接行情数据
+        return np.concatenate(window_prediction, axis=1)
 
 
 class PortfolioManager(object):
@@ -164,8 +217,9 @@ class PortfolioManager(object):
                         stock_history, 
                         init_asset=100000,
                         tax_rate=0.0025,
-                        start_trade_date='20140901',
+                        start_trade_date=None,
                         window_len=32,
+                        save=True
                         ):
         """
         参数：
@@ -179,23 +233,29 @@ class PortfolioManager(object):
 
         """
         self.config = config
+        self.calender = calender
+        self.stock_history = stock_history
         self.stock_list = config['data']['stock_code']
         self.init_asset = init_asset
         self.tax_rate = tax_rate
         self.start_trade_date = start_trade_date
         self.window_len = window_len
+        self.save = save
+
+        self.date_col = config['data']['date_col']
+        self.target_col = config['data']['target']
 
         self.n_asset = len(self.stock_list)
 
         self.reset()
 
 
-    def _step(self, offer, W1, trade_date):
+    def _step(self, offer, W1, step_date):
         """
         每个交易期的资产量变化，一步迭代更新状态
 
         参数：
-            offer,W1：agent计算出的报价向量和分配向量
+            offer,W1：agent计算出的报价向量和分配向量, 报价向量是波动的百分比
             trade_date:交易日期
         """
         P0 = self.P0
@@ -208,13 +268,14 @@ class PortfolioManager(object):
 
 
 
-    def reset(self,):
+    def _reset(self,):
         """
         初始化资产向量和持有量
         """
-        self.info = []
+        # 存储额外信息的全局infos
+        self.infos = []
         # 定义价格向量
-        self.P0 = np.array([1.0] + [1.0] * self.n_asset)
+        self.P0 = get_price_vector(self.start_trade_date)
         # 定义持有量向量
         self.V0 = np.array([self.init_asset] + [0.0] * self.n_asset)
         # 定义总资产
@@ -227,6 +288,22 @@ class PortfolioManager(object):
         """
         保存资产组合变化历史数据
         """
+
+    def get_price_vector(self, date):
+        """
+        获取指定日期的价格向量
+        """
+        price_list = []
+        for stock, history in zip(self.stock_list, self.stock_history):
+            try:
+                price = history[self.target_col].loc[date]
+            except Exception as e:
+                print(e)
+            price_list.append(price.values)
+
+        P = np.array([[1.0] + price_list])
+
+        return P
 
 
 
@@ -241,7 +318,7 @@ class Portfolio_Prediction_Env(gym.Env):
                     stock_history, 
                     window_len, 
                     prediction_history, 
-                    start_trade_date='20140901',
+                    start_trade_date=None,
                     save=True):
         """
         参数：
@@ -260,19 +337,43 @@ class Portfolio_Prediction_Env(gym.Env):
         self.stock_history = stock_history
         self.prediction_history = prediction_history
         self.window_len =window_len
-        self.start_trade_date = start_trade_date
+        self.n_asset = len(stock_history)
+        if start_trade_date is not None:
+            self.start_trade_date = arrow.get(start_trade_date, 'YYYYMMDD').date()
+        else:
+            self.start_trade_date = calender[int(len(calender) * config['preprocess']['train_pct']) + window_len + 1].date()
         self.save = save
 
         self.quotation_mgr = QuotationManager(  config=config,
                                                 calender=calender,
                                                 stock_history=stock_history,
-                                                window_len=window_len)
+                                                window_len=window_len,
+                                                prediction_history=prediction_history,
+                                                start_trade_date=self.start_trade_date,
+                                                )
+        
         self.portfolio_mgr = PortfolioManager(  config=config,
                                                 stock_history=stock_history,
                                                 calender=calender,
                                                 window_len=window_len,
+                                                start_trade_date=self.start_trade_date,
                                                 save=save)
+        # 定义行为空间，offer的scale为100
+        self.action_space = Dict({
+            'Weight': Box(low=0.0, high=1.0, shape=self.n_asset + 1),
+            'Offer': Box(low=-10.0, high=10.0, shape=self.n_asset + 1)
+        })
 
+        # 定义观察空间
+        self.observation_space = Dict({
+            'Quotation': Box(shape=(self.n_asset, self.window_len, self.quotation_mgr.quotation_shape[-1])),
+            'Prediction': Box(shape=(self.n_asset, self.window_len, self.quotation_mgr.prdiction_shape[-1])),
+            'Portfolio_Price': Box(low=0.0, shape=(self.n_asset + 1,)),
+            'Portfolio_Volumns': Box(low=0.0, shape=(self.n_asset + 1,)),
+            'Portfolio_Weight': Box(low=0.0, high=1.0, shape=(self.n_asset + 1,)),
+        })
+        
+        self.reset()
 
 
     def step(self,):
@@ -280,6 +381,16 @@ class Portfolio_Prediction_Env(gym.Env):
 
     def reset(self,):
         """"""
+        self.quotation_mgr._reset()
+        self.portfolio_mgr._reset()
+        self.infos = []
+
+        W0 = self.portfolio_mgr.W0
+        Offer0 = [0.0] * (self.n_asset + 1)
+
+        observation, reward, done, info = self.step(W0, Offer0)
+        
+        return observation
 
 
 
