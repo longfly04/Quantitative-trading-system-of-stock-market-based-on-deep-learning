@@ -5,7 +5,7 @@ import arrow
 import gym
 from stable_baselines import PPO2, DDPG
 from stable_baselines.common.vec_env import DummyVecEnv
-from stable_baselines.common.policies import MlpPolicy
+from stable_baselines.common.policies import CnnLstmPolicy,LstmPolicy
 
 from portfolio_trade.env.custom_env import Portfolio_Prediction_Env, QuotationManager, PortfolioManager
 
