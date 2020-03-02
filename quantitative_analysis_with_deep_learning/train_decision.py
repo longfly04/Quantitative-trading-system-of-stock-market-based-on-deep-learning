@@ -39,7 +39,7 @@ def train_decision(config=None, save=False, load=False, calender=None, history=N
     if load:
         model = DDPG.load('DDPG')
     else:
-        model = DDPG(   policy=MlpPolicy,
+        model = DDPG(   policy=LstmPolicy,
                         env=env,
                         )
 
@@ -49,7 +49,7 @@ def train_decision(config=None, save=False, load=False, calender=None, history=N
 
     for i in range(1000):
         action, _states = model.predict(obs)
-        obs, reward, done, info = env.step(action)
+        obs, reward, info , done = env.step(action[0], action[1])
         env.render()
 
     env.save()

@@ -784,21 +784,31 @@ class DataProcessor():
         daily_price_diff = price_.values - target_.values.reshape((-1, 1))
         daily_price_pct = (price_.values - target_.values.reshape((-1, 1))
                            ) * pct_scale / target_.values.reshape((-1, 1))
+        
         daily_price_diff = pd.DataFrame(daily_price_diff)
         daily_price_pct = pd.DataFrame(daily_price_pct)
+        daily_price_diff = daily_price_diff.rename(columns={k:'diff_within_' + v for k,v in zip(daily_price_diff.columns, price_.columns)})
+        daily_price_pct = daily_price_pct.rename(columns={k:'pct_within_' + v for k,v in zip(daily_price_pct.columns, price_.columns)})
         # 计算昨今开、高、低变化值和变化率
-        daily_diff = (price_ - price_.shift(1)).fillna(0)
-        daily_pct = (daily_diff * pct_scale / price_.shift(1)).fillna(0)
+        daily_diff = (price_ - price_.shift(1)).fillna(0).rename(columns=lambda x: 'diff_' + x)
+        daily_pct = (daily_diff * pct_scale / price_.shift(1)).fillna(0).rename(columns=lambda x:'pct_' + x)
         # 计算昨今收盘价变化值和变化率
         close_diff = (target_ - target_.shift(1)).fillna(0)
         close_pct = (close_diff * pct_scale / target_.shift(1)).fillna(0)
+        close_diff.name = 'diff_' + close_diff.name
+        close_pct.name = 'pct_' + close_pct.name
         # 计算昨今成交量变化值和变化率
-        volumn_diff = (volumn_ - volumn_.shift(1)).fillna(0)
-        volumn_pct = (volumn_diff / volumn_.shift(1)).fillna(0)
+        volumn_diff = (volumn_ - volumn_.shift(1)).fillna(0).rename(columns=lambda x:'diff_' + x)
+        volumn_pct = (volumn_diff / volumn_.shift(1)).fillna(0).rename(columns=lambda x:'pct_' + x)
 
         # 计算成交量和成交额的对数
         log_vol_diff = self.convert_log(volumn_diff)
-
+        log_vol_diff = log_vol_diff.rename(columns={k:'log_' + v for k,v in zip(log_vol_diff.columns, volumn_diff.columns)})
+        
+        # 重设索引
+        log_vol_diff = log_vol_diff.set_index(target_.index, drop=True)
+        daily_price_diff = daily_price_diff.set_index(target_.index, drop=True)
+        daily_price_pct = daily_price_pct.set_index(target_.index, drop=True)
         # 组合成行情特征[real, diff, pct ,others]
         daily_quote_feature = pd.concat(
             [target_, close_diff, close_pct,
