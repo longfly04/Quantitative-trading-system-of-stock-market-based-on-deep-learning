@@ -42,10 +42,8 @@ def train_decision(config=None, save=False, load=False, calender=None, history=N
         obs, _ = env.reset()
 
         for i in range(1000):
-
             W = np.random.uniform(0.0, 1.0, size=(6,))
             offer = np.random.uniform(-10.0, 10.0, size=(6,))
-
             obs, reward, info , done = env.step(offer=offer, W=W)
             # env.render()
             if done:
@@ -53,7 +51,7 @@ def train_decision(config=None, save=False, load=False, calender=None, history=N
                 break
         env.close()
 
-
+    # 训练模式
     env = DummyVecEnv(env)
     n_actions = env.action_space.shape
     param_noise = None
@@ -75,11 +73,11 @@ def train_decision(config=None, save=False, load=False, calender=None, history=N
     for i in range(1000):
         action, _states = model.predict(obs)
         obs, reward, info , done = env.step(action[0], action[1])
-        env.render()
+        # env.render()
         if done:
             env.save_history()
             break
-    env.save_history()
+
     env.close()
 
 

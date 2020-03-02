@@ -439,7 +439,7 @@ class PortfolioManager(object):
             "total_asset":A1.sum(),
             "reward":reward,
             "accumulated_reward":accumulated_reward,
-            "asset_vector":[P1, V1, A1, W1]
+            "asset_vector":{"P1":P1, "V1":V1, "A1":A1, "W1":W1}
         }
 
         self.infos.append(info)
@@ -683,17 +683,17 @@ class Portfolio_Prediction_Env(gym.Env):
         保存交易历史等
         """
         import pickle
-        
-        save_path = os.path.join(self.config['prediction']['save_result_path'], 'infos.json')
+
+        save_path = os.path.join(self.config['prediction']['save_result_path'], 'infos.pickle')
         
         try:
             if not os.path.exists(save_path):
                 with open(save_path, 'w', encoding='utf-8') as f:
-                    f.write(json.dumps(self.infos) + "\n")
+                    pickle.dumps(self.infos, f)
                     print("Save infos to %s" % save_path)
             else:
                 with open(save_path, 'a', encoding='utf-8') as f:
-                    f.write(json.dumps(self.infos) + "\n")
+                    pickle.dumps(self.infos, f)
                     print("Add saving infos to %s" % save_path)
         except Exception as e:
             print(e)

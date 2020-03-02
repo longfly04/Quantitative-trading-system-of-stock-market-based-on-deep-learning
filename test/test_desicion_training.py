@@ -31,7 +31,7 @@ def main():
                     calender=calender, 
                     history=history, 
                     predict_results_dict=predict_results_dict,
-                    test_mode=True)
+                    test_mode=False)
 
 
 
