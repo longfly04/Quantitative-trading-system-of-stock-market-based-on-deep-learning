@@ -68,7 +68,9 @@
     By LongFly
 
 """
-
+import os
+import sys
+import json
 import gym
 from gym.spaces import Box, Dict
 import pandas as pd 
@@ -92,16 +94,16 @@ class Order(object):
     """
     订单类
     """
-    def __init__(self, stock_symbol, direction, price, volume, status=None):
+    def __init__(self, stock_symbol, direction, price, volume, status):
         """
         
         """
-        self.orderid = arrow.now().format('YYYYMMDD-HHmmssZZ')
+        self.orderid = arrow.now().format('YYYYMMDD-HHmmss-SSSSSS')
         self.stock = stock_symbol
         self.direction = direction
         self.price = price
         self.volume = volume
-        self.status = Status.SUBMITTING
+        self.status = status
 
     def process(self,):
         """"""
@@ -118,9 +120,19 @@ class Order(object):
         }
 
     def set_status(self, status):
-        """"""
+        """
+        处理订单后设置订单状态
+        """
         assert status in [SUBMIT, TRADE, CANCEL, REJECT]
         self.status = status
+
+        return self.get_info()
+
+    def reset_price(self, price):
+        """
+        当价格溢出时，以市场最高或者最低价成交
+        """
+        self.price = price
 
         return self.get_info()
 
@@ -201,6 +213,7 @@ class QuotationManager(object):
             "high_low_price": high_low_price,
             "done":done
         }
+        self.infos.append(info)
 
         return quotation, prediction, info
 
@@ -217,11 +230,12 @@ class QuotationManager(object):
             "high_low_price": high_low_price,
             "done":done
         }
+        self.infos = [info, ]
 
         self.quotation_shape = quotation.shape
         self.prediction_shape = prediction.shape
 
-        return quotation, prediction, info
+        return quotation, prediction, self.infos
 
 
     def get_window_quotation(self, current_date):
@@ -345,28 +359,34 @@ class PortfolioManager(object):
 
         V1 = V0
 
+        W = W / W.sum()
+
+        # 获取今日价格
+        P1 = self.get_price_vector(step_date)
+
         # 首先处理存量订单，计算手续费，更新V1
         for stock,order in self.order_list.items():
             assert isinstance(order, Order)
             processed_order = self.order_process(order, high_low[stock])
             processed_info = processed_order.get_info()
+            # 输出全部订单情况
+            # self.print_order(processed_info, A0)
             # 处理过的订单状态应该只有 TRADE CANCEL REJECT三种
             if processed_info['status'] in [CANCEL, REJECT, SUBMIT]:
                 continue
-            idx = np.where(stock == self.stock_list) + 1
+            idx = self.stock_list.index(stock) + 1
             if processed_info['direction'] == SELL:
                 V1[0] = V1[0] + processed_info['volume'] * processed_info['price'] * (1 - self.tax_rate)
                 V1[idx] = V1[idx] - processed_info['volume']
             elif processed_info['direction'] == BUY:
                 V1[0] = V1[0] - processed_info['volume'] * processed_info['price'] * (1 + self.tax_rate)
                 V1[idx] = V1[idx] + processed_info['volume']
-
+            # 输出成交的订单情况
+            self.print_order(processed_info, V1 * P1, step_date)
         # 保存订单历史
         order_history = self.order_list
         self.order_list = {}
 
-        # 获取今日价格
-        P1 = self.get_price_vector(step_date)
         # 更新A1 W1
         A1 = P1 * V1
         W1 = A1 / A1.sum()
@@ -383,11 +403,12 @@ class PortfolioManager(object):
         assert len(delta_A) == len(self.stock_list) + 1
 
         # 计算订单，计算顺序为随机的，避免头部的资产频繁交易但尾部资产无法交易
-        trade_tuple = (i for i in zip(self.stock_list, delta_A[1:], offer_price[1:], V1[1:]))
-        for stock_i, delta_A_i, Offer_i, V_i in random.shuffle(trade_tuple):
+        trade_tuple = [i for i in zip(self.stock_list, delta_A[1:], offer_price[1:], V1[1:])]
+        random.shuffle(trade_tuple)
+        for stock_i, delta_A_i, Offer_i, V_i in trade_tuple:
             # 买卖方向，使用long表示买 使用short表示卖
             direction = BUY if delta_A_i >= 0 else SELL
-            volume = round(abs(delta_A_i)/(Offer_i * 100))
+            volume = round(abs(delta_A_i)/(Offer_i * 100)) * 100
             price = Offer_i
             # 订单合理性判断
             if direction == SELL:
@@ -421,6 +442,8 @@ class PortfolioManager(object):
             "asset_vector":[P1, V1, A1, W1]
         }
 
+        self.infos.append(info)
+
         self.P0 = P1
         self.A0 = A1
         self.W0 = W1
@@ -435,7 +458,7 @@ class PortfolioManager(object):
         # 存储额外信息的全局infos
         self.infos = []
         # 订单列表，存储次日的订单
-        self.order_list = []
+        self.order_list = {}
         # 定义价格向量
         self.P0 = self.get_price_vector(step_date)
         # 定义持有量向量
@@ -468,17 +491,56 @@ class PortfolioManager(object):
         处理订单
         """
         process_order = order
-        if process_order.get_info()['status'] == SUBMIT:
-            if process_order.get_info()['price'] >= high_low['daily_low'] and process_order.get_info()['price'] <= high_low['daily_high']:
-                # 成交价格在高低价内
-                process_order.set_status(TRADE)
-            else:
-                process_order.set_status(CANCEL)
-        elif process_order.get_info()['status'] == REJECT:
+        info = order.get_info()
+        if info['status'] == SUBMIT:
+            if info['direction'] == BUY:
+                # 买入的订单，报价高于最低价，就可以买入；
+                if info['price'] >= high_low['daily_low']:
+                    process_order.set_status(TRADE)
+                    if info['price'] >= high_low['daily_high']:
+                        # 买入订单报价，如果高于最高价，则以最高价成交
+                        process_order.reset_price(high_low['daily_high'])
+                else:
+                    # 买入但报价低于最低价，不成交
+                    process_order.set_status(CANCEL)
+            else :
+                # 卖出的订单，报价低于最高价，就可以卖出
+                if info['price'] <= high_low['daily_high']:
+                    process_order.set_status(TRADE)
+                    if info['price'] <= high_low['daily_low']:
+                        # 卖出的订单如果低于最低价，则以最低价成交
+                        process_order.reset_price(high_low['daily_low'])
+                else:
+                    # 卖出但报价高于最高价，不成交
+                    process_order.set_status(CANCEL)
+        elif info['status'] == REJECT:
             pass
 
-
         return process_order
+
+    def print_order(self, order_info, A, step_date):
+        """
+        打印订单信息
+        """
+        orderid = order_info['orderid']
+        stock = order_info['stock']
+        direction = "BUY  " if order_info['direction'] == BUY else "SELL "
+        price = order_info['price']
+        volume = order_info['volume']
+        status = "SUCCESS" if order_info['status'] == TRADE else "CANCEL" if order_info['status'] == CANCEL else "REJECT"
+
+        print(
+            "日期 : " + step_date.strftime("%Y-%m-%d") + "|",
+            "订单号 : " + orderid + "|",
+            "股票 : " + stock + "|",
+            "买卖方向 : " + direction + "|",
+            "报价 : " + str('%.2f' %price) + "|",
+            "交易额 : " + str('%.2f' %(volume * price)) + "|",
+            "订单状态 : " + status + "|",
+            "总资产 :  " + str('%.2f' %A.sum()) + "|"
+        )
+
+
 
 
 
@@ -531,7 +593,7 @@ class Portfolio_Prediction_Env(gym.Env):
 
         if stop_trade_date is None:
             # 为指定停止训练的时间，默认一个交易年
-            self.decision_daterange = self.decision_daterange[:252]
+            self.decision_daterange = self.decision_daterange[:63]
         else :
             self.decision_daterange = [i for i in self.decision_daterange if i <= arrow.get(stop_trade_date, 'YYYYMMDD').date()]
         
@@ -598,10 +660,12 @@ class Portfolio_Prediction_Env(gym.Env):
     def reset(self,):
         """"""
         self.current_date = self.decision_daterange[0]
-        quotation, prediction, info = self.quotation_mgr._reset(self.current_date)
-        P, V, W = self.portfolio_mgr._reset(self.current_date)
+        quotation, prediction, info1 = self.quotation_mgr._reset(self.current_date)
+        P, V, W, info2 = self.portfolio_mgr._reset(self.current_date)
+        infos = info1 + info2
+        
         self.order_list = {}
-        self.infos = []
+        self.infos = infos
 
         observation = {
             'Quotation':quotation,
@@ -611,11 +675,25 @@ class Portfolio_Prediction_Env(gym.Env):
             'Portfolio_Weight': W,
         }
 
-
-        return observation
+        return observation, self.infos
 
 
     def save_history(self,):
         """
         保存交易历史等
         """
+        import pickle
+        
+        save_path = os.path.join(self.config['prediction']['save_result_path'], 'infos.json')
+        
+        try:
+            if not os.path.exists(save_path):
+                with open(save_path, 'w', encoding='utf-8') as f:
+                    f.write(json.dumps(self.infos) + "\n")
+                    print("Save infos to %s" % save_path)
+            else:
+                with open(save_path, 'a', encoding='utf-8') as f:
+                    f.write(json.dumps(self.infos) + "\n")
+                    print("Add saving infos to %s" % save_path)
+        except Exception as e:
+            print(e)

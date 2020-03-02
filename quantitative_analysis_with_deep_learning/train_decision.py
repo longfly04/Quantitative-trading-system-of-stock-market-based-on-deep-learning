@@ -1,16 +1,17 @@
 import numpy as np 
 import pandas as pd 
 import arrow
+import random
 
 import gym
 from stable_baselines import PPO2, DDPG
+from stable_baselines.common.noise import NormalActionNoise,OrnsteinUhlenbeckActionNoise, AdaptiveParamNoiseSpec
 from stable_baselines.common.vec_env import DummyVecEnv
-from stable_baselines.common.policies import CnnLstmPolicy,LstmPolicy
-
+from stable_baselines.common.policies import LstmPolicy,MlpPolicy
 from portfolio_trade.env.custom_env import Portfolio_Prediction_Env, QuotationManager, PortfolioManager
 
 
-def train_decision(config=None, save=False, load=False, calender=None, history=None, predict_results_dict=None):
+def train_decision(config=None, save=False, load=False, calender=None, history=None, predict_results_dict=None, test_mode=False):
     """
     训练决策模型，从数据库读取数据并进行决策训练
 
@@ -35,24 +36,50 @@ def train_decision(config=None, save=False, load=False, calender=None, history=N
                                     window_len=32, 
                                     prediction_history=predict_dict,
                                     save=save)
+    
+    # 测试模式
+    if test_mode:
+        obs, _ = env.reset()
 
+        for i in range(1000):
+
+            W = np.random.uniform(0.0, 1.0, size=(6,))
+            offer = np.random.uniform(-10.0, 10.0, size=(6,))
+
+            obs, reward, info , done = env.step(offer=offer, W=W)
+            # env.render()
+            if done:
+                env.save_history()
+                break
+        env.close()
+
+
+    env = DummyVecEnv(env)
+    n_actions = env.action_space.shape
+    param_noise = None
+    action_noise = OrnsteinUhlenbeckActionNoise(mean=np.zeros(n_actions), sigma=float(0.5) * np.ones(n_actions))
     if load:
-        model = DDPG.load('DDPG')
+        model = PPO2.load('DDPG')
     else:
-        model = DDPG(   policy=LstmPolicy,
+        model = PPO2(   policy=MlpPolicy,
                         env=env,
+                        verbose=1,
+                        # param_noise=param_noise,
+                        # action_noise=action_noise
                         )
 
     model.learn(total_timesteps=10000,)
 
-    obs = env.reset()
+    obs, _ = env.reset()
 
     for i in range(1000):
         action, _states = model.predict(obs)
         obs, reward, info , done = env.step(action[0], action[1])
         env.render()
-
-    env.save()
+        if done:
+            env.save_history()
+            break
+    env.save_history()
     env.close()
 
 
