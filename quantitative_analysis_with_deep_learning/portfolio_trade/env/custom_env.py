@@ -544,9 +544,11 @@ class PortfolioManager(object):
 
 
 
-class Portfolio_Prediction_Env(gym.Env):
+class Portfolio_Prediction_Env(gym.GoalEnv):
     """
     基于股市预测的组合资产管理模拟环境
+
+    使用GoalEnv，因为observation是dict类型
     """
     def __init__(self, config, 
                     calender, 
@@ -676,6 +678,10 @@ class Portfolio_Prediction_Env(gym.Env):
         }
 
         return observation, self.infos
+
+    def render(self, mode='human'):
+        """"""
+        return super().render(mode=mode)
 
 
     def save_history(self,):

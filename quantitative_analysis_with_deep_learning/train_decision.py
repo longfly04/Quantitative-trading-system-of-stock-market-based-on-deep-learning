@@ -7,11 +7,19 @@ import gym
 from stable_baselines import PPO2, DDPG
 from stable_baselines.common.noise import NormalActionNoise,OrnsteinUhlenbeckActionNoise, AdaptiveParamNoiseSpec
 from stable_baselines.common.vec_env import DummyVecEnv
-from stable_baselines.common.policies import LstmPolicy,MlpPolicy
+from stable_baselines.common.policies import LstmPolicy
+from stable_baselines.ddpg.policies import MlpPolicy
 from portfolio_trade.env.custom_env import Portfolio_Prediction_Env, QuotationManager, PortfolioManager
 
+from stable_baselines.common.env_checker import check_env
 
-def train_decision(config=None, save=False, load=False, calender=None, history=None, predict_results_dict=None, test_mode=False):
+def train_decision( config=None, 
+                    save=False, 
+                    load=False, 
+                    calender=None, 
+                    history=None, 
+                    predict_results_dict=None, 
+                    test_mode=False):
     """
     训练决策模型，从数据库读取数据并进行决策训练
 
@@ -41,6 +49,8 @@ def train_decision(config=None, save=False, load=False, calender=None, history=N
     if test_mode:
         obs, _ = env.reset()
 
+        check_env(env)
+
         for i in range(1000):
             W = np.random.uniform(0.0, 1.0, size=(6,))
             offer = np.random.uniform(-10.0, 10.0, size=(6,))
@@ -52,14 +62,14 @@ def train_decision(config=None, save=False, load=False, calender=None, history=N
         env.close()
 
     # 训练模式
-    env = DummyVecEnv(env)
+    # env = DummyVecEnv(env)
     n_actions = env.action_space.shape
     param_noise = None
     action_noise = OrnsteinUhlenbeckActionNoise(mean=np.zeros(n_actions), sigma=float(0.5) * np.ones(n_actions))
     if load:
-        model = PPO2.load('DDPG')
+        model = DDPG.load('DDPG')
     else:
-        model = PPO2(   policy=MlpPolicy,
+        model = DDPG(   policy=MlpPolicy,
                         env=env,
                         verbose=1,
                         # param_noise=param_noise,

@@ -28,13 +28,14 @@ def main():
     predict_results_dict = train_forecasting(   config, 
                                                 calender=calender, 
                                                 history=history, 
-                                                forecasting_deadline='20150201')
+                                                forecasting_deadline='20150401')
     # 训练决策模型，初始化资金，得到
     train_decision( config=config,
                     save=True, 
                     calender=calender, 
                     history=history, 
-                    predict_results_dict=predict_results_dict)
+                    predict_results_dict=predict_results_dict,
+                    test_mode=True)
 
 
 
