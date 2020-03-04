@@ -215,7 +215,9 @@ def train_forecasting(config=None, save=False, calender=None, history=None, fore
         else:
             results_df = pd.read_csv(results_path[0])
         
+        """
         # 全量训练，改为使用普通方法训练，节省时间
+        """
         if latest_file is None:
             # 训练数据生成
             X, Y = data_pro.get_window_data(total_x_train,
@@ -268,7 +270,9 @@ def train_forecasting(config=None, save=False, calender=None, history=None, fore
             # 加载已有的权重，
             model.load_model_weight(latest_file)
 
+        """
         # 按步全量训练，并预测
+        """
         for date_step in step_by_step_train_daterange:
             try:
                 recent_date = results_df['predict_date'].iloc[-1]

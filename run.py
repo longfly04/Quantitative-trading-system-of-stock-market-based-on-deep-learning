@@ -15,7 +15,7 @@ sys.path.insert(0,'D:\\GitHub\\Quantitative-analysis-with-Deep-Learning\\quantit
 
 from preparation import prepare_train
 from train_forecasting import train_forecasting
-from train_decision import train_decision
+# from train_decision import train_decision
 
 
 def main():
@@ -23,20 +23,21 @@ def main():
     with open('config.json', 'r', encoding='utf-8') as f:
         config = json.load(f)
     # 准备交易行情和日历
-    calender, history, all_quote = prepare_train(config, download=True)
+    calender, history, all_quote = prepare_train(config, download=False)
     # 训练预测模型，得到预测向量和风险向量
     predict_results_dict = train_forecasting(   config, 
                                                 calender=calender, 
                                                 history=history, 
                                                 forecasting_deadline='20150401')
     # 训练决策模型，初始化资金，得到
+    '''
     train_decision( config=config,
                     save=True, 
                     calender=calender, 
                     history=history, 
                     predict_results_dict=predict_results_dict,
                     test_mode=True)
-
+    '''
 
 
     print("A lot of work to do ...")

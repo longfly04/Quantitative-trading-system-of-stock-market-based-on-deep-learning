@@ -15,22 +15,23 @@
             资产分配比例W_t（用于计算action）      shape:(历史时间T, n_asset+1, )
 
         action space：
-            Dict{
-                Weight：Box((0,1), shape=n_asset+1),      # 资产分配比例，用于计算交易方向和交易量
-                Percentage：Box((-1,1), shape=n_asset+1)  # 交易价格相比当日价格浮动比例，用于计算交易价格,其中现金比例固定为1
-                }
+                Box([(0,1),(-10,10)], shape=(2, n_asset+1)),      
+                # action space只支持Box类型数据，将资产分配比例和价格浮动比例合并
+                # 资产分配比例，用于计算交易方向和交易量
+                # 交易价格相比当日价格浮动比例，用于计算交易价格,其中现金比例固定为1
+
 
         observation space：
-            对应于data source的全部数据，以窗口化形式迭代，shape:(reshape(data_source), obs_window_length)：
+            # 对应于data source的全部数据，不再需要窗口数据，只需要股票池对应的数据，
+            # Gym.Env只支持Box类型的obs space，但是GoalEnv可以支持Dict类型的obs
+            # 使用GoalEnv，需要将obs设置为行情与预测的观察，achieved设置为资产向量，desired设置为奖励
+            # 宽度与action space一致， n_asset+1
             （实际上，只需要对n_asset预测即可，通过配置确定从池中选择哪些股票进行投资）
                 Dict{
-                    Quote: Box(shape=(n_asset, obs_window_length, 行情列数quote_col_num)),
-                    Pred_price:Box(shape=(n_asset, 预测长度pred_len)),
-                    Pred_var:Box(shape=(n_asset, 准确率和损失acc+loss)),
-                    Portfolio_price：Box(shape=(obs_window_length, n_asset+1, )),
-                    Portfolio_volumns:Box(shape=(obs_window_length, n_asset+1, )),
-                    Portfolio_weight:Box(shape=(obs_window_length, n_asset+1, )),
-                    }
+                    observation：Box(low=-100, high=100, shape=(n_asset, 行情列数quote_col_num + 预测长度pred_len + 准确率和损失acc+loss)),
+                    achieved_goal:Box(shape=(3, n_asset + 1)),  # P,V,W
+                    desired_goal:Box(shape=(2,))  # reward
+                }
 
         constraint condition:
             1.总资产 = 资产持有量 * 资产价格        A_t = V_t * P_t
@@ -556,7 +557,7 @@ class Portfolio_Prediction_Env(gym.GoalEnv):
                     prediction_history, 
                     init_asset=100000.0,
                     tax_rate=0.0025,
-                    window_len=32, 
+                    window_len=1, 
                     start_trade_date=None,
                     stop_trade_date=None,
                     save=True):
@@ -618,10 +619,29 @@ class Portfolio_Prediction_Env(gym.GoalEnv):
                                                 stop_trade_date=self.decision_daterange[-1],
                                                 save=save)
         # 定义行为空间，offer的scale为100
-        self.action_space = Box(low=np.array([[0.0] * (self.n_asset + 1), [-10.0]* (self.n_asset + 1)]), high=np.array([[1.0] * (self.n_asset + 1), [10.0]* (self.n_asset + 1)]))
+        action_space_shape = (2, self.n_asset + 1)
+        action_space_low = np.array([[0.0] * (self.n_asset + 1), [-10.0]* (self.n_asset + 1)])
+        action_space_high = np.array([[1.0] * (self.n_asset + 1), [10.0]* (self.n_asset + 1)])
+        self.action_space = Box(low=action_space_low, high=action_space_high, shape=action_space_shape)
 
-        # 定义观察空间
+        # 定义观察空间：(行情+预测, n_asset)
+        obs_space_shape = (None, self.n_asset)
+        obs_space_low = -100 * np.ones(shape=obs_space_shape)
+        obs_space_high = 100 * np.ones(shape=obs_space_shape)
+        # 已经达到的目标：P，V，W
+        achieved_goal_shape = (3, self.n_asset + 1)
+        achieved_goal_low = np.zeros(shape=achieved_goal_shape)
+        achieved_goal_high = self.init_asset * np.ones(shape=achieved_goal_shape)
+        # 计划达到的目标：A
+        desired_goal_shape = (1, self.n_asset + 1)
+        desired_goal_low = np.zeros(shape=desired_goal_shape)
+        desired_goal_high = self.init_asset * np.ones(shape=desired_goal_shape)
+
+
         self.observation_space = Dict({
+            'observation', 
+            'achieved_goal',
+            'desired_goal' ,
             'Quotation': Box(low=-1000.0, high=1000.0, shape=(self.n_asset, self.window_len, self.quotation_mgr.quotation_shape[-1])),
             'Prediction': Box(low=-10.0, high=10.0,shape=(self.n_asset, self.quotation_mgr.prediction_shape[-1])),
             'Portfolio_Price': Box(low=0.0, high=1000.0, shape=(self.n_asset + 1,)),
@@ -678,6 +698,10 @@ class Portfolio_Prediction_Env(gym.GoalEnv):
         }
 
         return observation, self.infos
+
+    def compute_reward(self, achieved_goal, desired_goal, info):
+        """"""
+
 
     def render(self, mode='human'):
         """"""
