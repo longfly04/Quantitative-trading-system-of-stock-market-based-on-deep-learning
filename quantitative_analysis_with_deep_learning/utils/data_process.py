@@ -467,8 +467,8 @@ class DataProcessor():
                      linestyle='-', linewidth=linewidth/2, color='k')
             plt.legend()
             if save:
-                plt.savefig(
-                    'saved_figures\\30_price_amount.png')
+                plt.savefig(os.path.join(sys.path[0],
+                    'saved_figures\\30_price_amount.png'))
             plt.show()
 
             # 1.MACD
@@ -495,7 +495,7 @@ class DataProcessor():
 
             plt.legend()
             if save:
-                plt.savefig('saved_figures\\31_MACD.png')
+                plt.savefig(os.path.join(sys.path[0],'saved_figures\\31_MACD.png'))
             plt.show()
 
             # 2.KDJ and BOLL
@@ -521,27 +521,29 @@ class DataProcessor():
                         marker='^', color='r', label='three days KDJK cross up 3 days KDJD')
             plt.legend()
             if save:
-                plt.savefig('saved_figures\\32_boll_kdj.png')
+                plt.savefig(os.path.join(sys.path[0],'saved_figures\\32_boll_kdj.png'))
             plt.show()
 
             # 3.Open price and RSI
             plt.figure(figsize=(16, 10), dpi=150)
             linewidth = 1
-            plt.subplot(2, 1, 1)
-            plt.title('Open price and RSI')
-            plt.plot(plot_dataset['open'], label='Open Price')
-            plt.bar(x, plot_dataset['open_2_d'],
-                    label='open delta against next 2 day')
-            plt.plot(
-                plot_dataset['open_-2_r'], label='open price change (in percent) between today and the day before yesterday', linewidth=linewidth)
+            plt.subplot(3, 1, 1)
+            plt.title('Close price and RSI')
+            plt.plot(plot_dataset['close'], label='Close Price')
             plt.legend()
-            plt.subplot(2, 1, 2)
+            plt.subplot(3, 1, 2)
+            plt.bar(x, plot_dataset['open_2_d'],
+                    label='open delta against next 2 day', color='orange')
+            plt.plot(
+                plot_dataset['open_-2_r'], label='open price change (in percent) between today and the day before yesterday', linewidth=linewidth,color='c')
+            plt.legend()
+            plt.subplot(3, 1, 3)
             plt.plot(plot_dataset['rsi_12'], label='12 days RSI ', color='c')
             plt.plot(plot_dataset['rsi_6'], label='6 days RSI',
                      linewidth=linewidth, color='r')
             plt.legend()
             if save:
-                plt.savefig('saved_figures\\33_open_rsi.png')
+                plt.savefig(os.path.join(sys.path[0],'saved_figures\\33_close_rsi.png'))
             plt.show()
 
             # 4.CR and WR
@@ -566,7 +568,7 @@ class DataProcessor():
                      linestyle='-', linewidth=linewidth)
             plt.legend()
             if save:
-                plt.savefig('saved_figures\\34_cr_ma.png')
+                plt.savefig(os.path.join(sys.path[0],'saved_figures\\34_cr_ma.png'))
             plt.show()
 
             # 5.CCI TR VR
@@ -594,7 +596,7 @@ class DataProcessor():
                     label='MAVR is the simple moving average of VR')
             plt.legend()
             if save:
-                plt.savefig('saved_figures\\35_cci_tr_vr.png')
+                plt.savefig(os.path.join(sys.path[0],'saved_figures\\35_cci_tr_vr.png'))
             plt.show()
 
             # 6.DMI
@@ -620,7 +622,7 @@ class DataProcessor():
                 plot_dataset['adxr'], label='ADXR, 6 days SMA of ADX', linewidth=linewidth)
             plt.legend()
             if save:
-                plt.savefig('saved_figures\\36_close_DMI.png')
+                plt.savefig(os.path.join(sys.path[0],'saved_figures\\36_close_DMI.png'))
             plt.show()
 
         # 处理异常值，将布尔值转换为 -1，1
