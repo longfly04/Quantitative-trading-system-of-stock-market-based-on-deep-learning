@@ -62,6 +62,7 @@
             obs, reward, done, info
             reward：论文中使用log比例，也有分为浮动收益和固定收益，我们总体上希望 log(A_t+1/A_0) 最大
                     或者在一个episode内，最终的A_t最大。
+            done:达到steps总数，则一个episode结束，另外如果亏损过大或者最大回撤过大，超过阈值也可以早死亡。
 
     方法：
 
@@ -253,7 +254,10 @@ class QuotationManager(object):
 
             window_quotation.append(quote.values)
 
-        return np.concatenate(window_quotation, axis=1)
+        if self.window_len == 1:
+            window_quotation = np.array(window_quotation).reshape((len(window_quotation), v.shape[-1]))
+
+        return window_quotation.T
     
     def get_prediction(self, current_date):
         """
@@ -270,7 +274,7 @@ class QuotationManager(object):
             prediction_list.append(prediction[self.prediction_col].values)
         
         # 横向拼接行情数据
-        return np.array(prediction_list)
+        return np.array(prediction_list).T
 
     def get_high_low_price(self, current_date):
         """
@@ -440,7 +444,18 @@ class PortfolioManager(object):
             "total_asset":A1.sum(),
             "reward":reward,
             "accumulated_reward":accumulated_reward,
-            "asset_vector":{"P1":P1, "V1":V1, "A1":A1, "W1":W1}
+            "asset_vector":{
+                            "P1":P1, 
+                            "V1":V1, 
+                            "A1":A1, 
+                            "W1":W1
+                            },
+            "asset_history":{
+                            "P0":self.P0,
+                            "V0":self.V0,
+                            "A0":self.A0,
+                            "W0":self.W0
+                            }
         }
 
         self.infos.append(info)
@@ -622,10 +637,10 @@ class Portfolio_Prediction_Env(gym.GoalEnv):
         action_space_shape = (2, self.n_asset + 1)
         action_space_low = np.array([[0.0] * (self.n_asset + 1), [-10.0]* (self.n_asset + 1)])
         action_space_high = np.array([[1.0] * (self.n_asset + 1), [10.0]* (self.n_asset + 1)])
-        self.action_space = Box(low=action_space_low, high=action_space_high, shape=action_space_shape)
+        self.action_space = Box(low=action_space_low, high=action_space_high, )
 
         # 定义观察空间：(行情+预测, n_asset)
-        obs_space_shape = (None, self.n_asset)
+        obs_space_shape = (self.quotation_mgr.quotation_shape[0] + self.quotation_mgr.prediction_shape[0], self.n_asset)
         obs_space_low = -100 * np.ones(shape=obs_space_shape)
         obs_space_high = 100 * np.ones(shape=obs_space_shape)
         # 已经达到的目标：P，V，W
@@ -633,22 +648,18 @@ class Portfolio_Prediction_Env(gym.GoalEnv):
         achieved_goal_low = np.zeros(shape=achieved_goal_shape)
         achieved_goal_high = self.init_asset * np.ones(shape=achieved_goal_shape)
         # 计划达到的目标：A
-        desired_goal_shape = (1, self.n_asset + 1)
+        desired_goal_shape = (self.n_asset + 1, )
         desired_goal_low = np.zeros(shape=desired_goal_shape)
         desired_goal_high = self.init_asset * np.ones(shape=desired_goal_shape)
 
-
+        self.observation_space = Box(low=obs_space_low, high=obs_space_high,)
+        '''
         self.observation_space = Dict({
-            'observation', 
-            'achieved_goal',
-            'desired_goal' ,
-            'Quotation': Box(low=-1000.0, high=1000.0, shape=(self.n_asset, self.window_len, self.quotation_mgr.quotation_shape[-1])),
-            'Prediction': Box(low=-10.0, high=10.0,shape=(self.n_asset, self.quotation_mgr.prediction_shape[-1])),
-            'Portfolio_Price': Box(low=0.0, high=1000.0, shape=(self.n_asset + 1,)),
-            'Portfolio_Volumns': Box(low=0.0, high=self.init_asset, shape=(self.n_asset + 1,)),
-            'Portfolio_Weight': Box(low=0.0, high=1.0, shape=(self.n_asset + 1,)),
+            'observation':Box(low=obs_space_low, high=obs_space_high,), 
+            'achieved_goal':Box(low=achieved_goal_low, high=achieved_goal_high, ),
+            'desired_goal': Box(low=desired_goal_low, high=desired_goal_high, ),
         })
-        
+        '''
         self.reset()
 
 
@@ -662,12 +673,13 @@ class Portfolio_Prediction_Env(gym.GoalEnv):
 
         P1, V1, W1, info2 = self.portfolio_mgr._step(offer, W, info1['high_low_price'], step_date)
 
+        obs = np.vstack((quotation, prediction))
+        achieved_goal = np.vstack((P1, V1, W1))
+
         observation = {
-            'Quotation':quotation,
-            'Prediction': prediction,
-            'Portfolio_Price': P1,
-            'Portfolio_Volumns': V1,
-            'Portfolio_Weight': W1,
+            'observation':obs,
+            'achieved_goal':achieved_goal,
+            'desired_goal': P1 * V1,
         }
 
         info = dict(info1, **info2)
@@ -676,7 +688,7 @@ class Portfolio_Prediction_Env(gym.GoalEnv):
 
         self.infos.append(info)
 
-        return observation, info['reward'], info, info['done']
+        return obs, info['reward'], info, info['done']
 
 
     def reset(self,):
@@ -689,18 +701,20 @@ class Portfolio_Prediction_Env(gym.GoalEnv):
         self.order_list = {}
         self.infos = infos
 
+        obs = np.vstack((quotation, prediction))
+        achieved_goal = np.vstack((P, V, W))
+
         observation = {
-            'Quotation':quotation,
-            'Prediction': prediction,
-            'Portfolio_Price': P,
-            'Portfolio_Volumns': V,
-            'Portfolio_Weight': W,
+            'observation':obs,
+            'achieved_goal':achieved_goal,
+            'desired_goal': P * V,
         }
 
-        return observation, self.infos
+        return obs, self.infos
 
     def compute_reward(self, achieved_goal, desired_goal, info):
         """"""
+        return info['reward']
 
 
     def render(self, mode='human'):

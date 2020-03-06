@@ -4,10 +4,10 @@ import arrow
 import random
 
 import gym
-from stable_baselines import PPO2, DDPG
+from stable_baselines import PPO2, DDPG, PPO1
 from stable_baselines.common.noise import NormalActionNoise,OrnsteinUhlenbeckActionNoise, AdaptiveParamNoiseSpec
 from stable_baselines.common.vec_env import DummyVecEnv
-from stable_baselines.common.policies import LstmPolicy
+# from stable_baselines.common.policies import MlpPolicy
 from stable_baselines.ddpg.policies import MlpPolicy
 from portfolio_trade.env.custom_env import Portfolio_Prediction_Env, QuotationManager, PortfolioManager
 
@@ -41,7 +41,7 @@ def train_decision( config=None,
     env = Portfolio_Prediction_Env( config=config,
                                     calender=calender, 
                                     stock_history=history, 
-                                    window_len=32, 
+                                    window_len=1, 
                                     prediction_history=predict_dict,
                                     save=save)
     
@@ -49,7 +49,7 @@ def train_decision( config=None,
     if test_mode:
         obs, _ = env.reset()
 
-        check_env(env)
+        # 
 
         for i in range(1000):
             W = np.random.uniform(0.0, 1.0, size=(6,))
@@ -62,10 +62,14 @@ def train_decision( config=None,
         env.close()
 
     # 训练模式
-    # env = DummyVecEnv(env)
+    # env = DummyVecEnv(env) # PPO2需要向量化环境
     n_actions = env.action_space.shape
     param_noise = None
     action_noise = OrnsteinUhlenbeckActionNoise(mean=np.zeros(n_actions), sigma=float(0.5) * np.ones(n_actions))
+    
+    # 检查环境
+    # check_env(env)
+    
     if load:
         model = DDPG.load('DDPG')
     else:
