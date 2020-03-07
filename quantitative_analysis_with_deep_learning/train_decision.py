@@ -4,14 +4,16 @@ import arrow
 import random
 
 import gym
-from stable_baselines import PPO2, DDPG, PPO1
+from stable_baselines import PPO2, DDPG, PPO1, A2C
 from stable_baselines.common.noise import NormalActionNoise,OrnsteinUhlenbeckActionNoise, AdaptiveParamNoiseSpec
 from stable_baselines.common.vec_env import DummyVecEnv
-# from stable_baselines.common.policies import MlpPolicy
-from stable_baselines.ddpg.policies import MlpPolicy
+from stable_baselines.common.policies import MlpPolicy, LstmPolicy
+from stable_baselines.ddpg.policies import MlpPolicy as DDPG_MlpPolicy
 from portfolio_trade.env.custom_env import Portfolio_Prediction_Env, QuotationManager, PortfolioManager
 
 from stable_baselines.common.env_checker import check_env
+
+MODEL = 'DDPG'
 
 def train_decision( config=None, 
                     save=False, 
@@ -43,53 +45,57 @@ def train_decision( config=None,
                                     stock_history=history, 
                                     window_len=1, 
                                     prediction_history=predict_dict,
+                                    stop_trade_date='20150330',
                                     save=save)
     
     # 测试模式
     if test_mode:
-        obs, _ = env.reset()
-
-        # 
-
+        obs = env.reset()
+        # check_env(env)
         for i in range(1000):
             W = np.random.uniform(0.0, 1.0, size=(6,))
             offer = np.random.uniform(-10.0, 10.0, size=(6,))
-            obs, reward, info , done = env.step(offer=offer, W=W)
+            obs, reward, done, infos = env.step(np.hstack((W, offer)))
             # env.render()
             if done:
                 env.save_history()
                 break
         env.close()
-
+        
     # 训练模式
-    # env = DummyVecEnv(env) # PPO2需要向量化环境
-    n_actions = env.action_space.shape
-    param_noise = None
-    action_noise = OrnsteinUhlenbeckActionNoise(mean=np.zeros(n_actions), sigma=float(0.5) * np.ones(n_actions))
-    
-    # 检查环境
-    # check_env(env)
-    
-    if load:
-        model = DDPG.load('DDPG')
-    else:
-        model = DDPG(   policy=MlpPolicy,
-                        env=env,
-                        verbose=1,
-                        # param_noise=param_noise,
-                        # action_noise=action_noise
-                        )
+    if MODEL == "DDPG":
+        # 添加噪声
+        n_actions = env.action_space.shape
+        param_noise = None
+        action_noise = OrnsteinUhlenbeckActionNoise(mean=np.zeros(n_actions), sigma=float(0.5) * np.ones(n_actions))
+        if load:
+            model = DDPG.load('DDPG')
+        else:
+            model = DDPG(   policy=DDPG_MlpPolicy,
+                            env=env,
+                            verbose=1,
+                            param_noise=param_noise,
+                            action_noise=action_noise,
+                            tensorboard_log='./tb_log',
+                            )
+        model.learn(total_timesteps=10000,)
+    elif MODEL == 'PPO1':
+        model = PPO1(MlpPolicy, 
+                    env, 
+                    verbose=1,
+                    tensorboard_log='./tb_log',
+                    )
+        model.learn(total_timesteps=10000)
 
-    model.learn(total_timesteps=10000,)
-
-    obs, _ = env.reset()
+    obs = env.reset()
 
     for i in range(1000):
         action, _states = model.predict(obs)
-        obs, reward, info , done = env.step(action[0], action[1])
-        # env.render()
+        obs, reward, done, info  = env.step(action)
+        env.render(info=info)
         if done:
-            env.save_history()
+            # env.save_history()
+            env.reset()
             break
 
     env.close()

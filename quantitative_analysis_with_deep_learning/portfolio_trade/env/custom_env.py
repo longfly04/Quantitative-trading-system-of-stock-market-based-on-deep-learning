@@ -332,6 +332,8 @@ class PortfolioManager(object):
 
         self.n_asset = len(self.stock_list)
 
+        self.metadata = {'render.modes':['human',]}
+
         self._reset(start_trade_date)
 
 
@@ -363,41 +365,50 @@ class PortfolioManager(object):
         W0 = self.W0
 
         V1 = V0
-
-        W = W / W.sum()
+        # 对算法得出的W进行归一化，防止除以0
+        W = W / (W.sum() + 1e-7)
 
         # 获取今日价格
         P1 = self.get_price_vector(step_date)
 
         # 首先处理存量订单，计算手续费，更新V1
         for stock,order in self.order_list.items():
+            # 订单状态为[SUBMIT,REJECT]两种
             assert isinstance(order, Order)
             processed_order = self.order_process(order, high_low[stock])
             processed_info = processed_order.get_info()
-            # 输出全部订单情况
-            # self.print_order(processed_info, A0)
-            # 处理过的订单状态应该只有 TRADE CANCEL REJECT三种
+            # 处理过的订单状态应该只有 TRADE CANCEL REJECT三种，将无效订单略过
             if processed_info['status'] in [CANCEL, REJECT, SUBMIT]:
                 continue
+            # 只处理状态为TRADE的订单
             idx = self.stock_list.index(stock) + 1
             if processed_info['direction'] == SELL:
-                V1[0] = V1[0] + processed_info['volume'] * processed_info['price'] * (1 - self.tax_rate)
-                V1[idx] = V1[idx] - processed_info['volume']
+                # 卖出，资金增加，持有量减少，收税
+                V1[0] = V0[0] + processed_info['volume'] * processed_info['price'] * (1 - self.tax_rate)
+                V1[idx] = V0[idx] - processed_info['volume']
             elif processed_info['direction'] == BUY:
-                V1[0] = V1[0] - processed_info['volume'] * processed_info['price'] * (1 + self.tax_rate)
-                V1[idx] = V1[idx] + processed_info['volume']
-            # 输出成交的订单情况
-            self.print_order(processed_info, V1 * P1, step_date)
+                # 买入，资金减少，持有量增加，收税
+                V1[0] = V0[0] - processed_info['volume'] * processed_info['price'] * (1 + self.tax_rate)
+                V1[idx] = V0[idx] + processed_info['volume']
+            
         # 保存订单历史
         order_history = self.order_list
-        self.order_list = {}
-
         # 更新A1 W1
         A1 = P1 * V1
         W1 = A1 / A1.sum()
 
+        # 输出成交的订单情况
+        for stock,his_order in order_history.items():
+            order_info = his_order.get_info()
+            if order_info['status'] == TRADE:
+                self.print_order(order_info, V1 * P1, step_date)
+
+        # 清空订单列表
+        self.order_list = {}
+
         # 出价是在今日的价格基础上乘以 (1+offer向量)
-        offer_price = P1 * offer / 100 + P1   
+        offer_price = P1 * offer / 100 + P1
+        offer_price = np.round(offer_price, 2)
         # 需要交易的资产数
         delta_A = (W - W1) * A1.sum()
 
@@ -410,32 +421,34 @@ class PortfolioManager(object):
         # 计算订单，计算顺序为随机的，避免头部的资产频繁交易但尾部资产无法交易
         trade_tuple = [i for i in zip(self.stock_list, delta_A[1:], offer_price[1:], V1[1:])]
         random.shuffle(trade_tuple)
+
         for stock_i, delta_A_i, Offer_i, V_i in trade_tuple:
             # 买卖方向，使用long表示买 使用short表示卖
-            direction = BUY if delta_A_i >= 0 else SELL
+            direction = BUY if delta_A_i > 0 else SELL
             volume = round(abs(delta_A_i)/(Offer_i * 100)) * 100
             price = Offer_i
-            # 订单合理性判断
-            if direction == SELL:
-                # 卖出的量不能大于持仓
-                volume = V_i if volume > V_i else volume
-                order = Order(stock_symbol=stock_i, direction=SELL, price=price, volume=volume, status=SUBMIT)
-                self.order_list[stock_i] = order
-            # 买入股票需要由足够的position
-            if direction == BUY:
-                if position >= price * volume: # 资金足够
-                    order = Order(stock_symbol=stock_i, direction=BUY, price=price, volume=volume, status=SUBMIT)
+            # 订单合理性判断，避免出现成交量为0的订单
+            if volume > 0:
+                if direction == SELL:
+                    # 卖出的量不能大于持仓
+                    volume = V_i if volume > V_i else volume
+                    order = Order(stock_symbol=stock_i, direction=SELL, price=price, volume=volume, status=SUBMIT)
                     self.order_list[stock_i] = order
-                    position = position - price * volume
-                else:
-                    # 不合理订单也增加到列表中，便于记录
-                    order = Order(stock_symbol=stock_i, direction=BUY, price=price, volume=volume, status=REJECT)
-                    self.order_list[stock_i] = order
+                # 买入股票需要由足够的position
+                if direction == BUY:
+                    if position >= price * volume: # 资金足够
+                        order = Order(stock_symbol=stock_i, direction=BUY, price=price, volume=volume, status=SUBMIT)
+                        self.order_list[stock_i] = order
+                        position = position - price * volume
+                    else:
+                        # 资金不够，被拒绝的订单也增加到列表中，便于记录
+                        order = Order(stock_symbol=stock_i, direction=BUY, price=price, volume=volume, status=REJECT)
+                        self.order_list[stock_i] = order
         
         # log奖励函数,
         reward = np.log(A1.sum()/A0.sum())
         # 积累奖励函数
-        accumulated_reward = A1.sum()/self.init_asset
+        accumulated_reward = A1.sum()/self.init_asset            
 
         info = {
             "order_history":order_history,          # 今日成交订单
@@ -458,6 +471,16 @@ class PortfolioManager(object):
                             }
         }
 
+        # 打印资产向量
+        #for k,v in info['asset_vector'].items():
+        #    print(k,':',v)
+
+        # 如果损失大于阈值，则中断
+        if accumulated_reward < 0.9:
+            info['done'] = True
+        else:
+            info['done'] = False
+
         self.infos.append(info)
 
         self.P0 = P1
@@ -471,6 +494,7 @@ class PortfolioManager(object):
         """
         初始化资产向量和持有量
         """
+        info = {}
         # 存储额外信息的全局infos
         self.infos = []
         # 订单列表，存储次日的订单
@@ -484,7 +508,7 @@ class PortfolioManager(object):
         # 定义资产分配比例
         self.W0 = self.A0 / self.A0.sum()
 
-        return self.P0, self.V0, self.W0, self.infos
+        return self.P0, self.V0, self.W0, info
 
     def get_price_vector(self, current_date):
         """
@@ -547,17 +571,14 @@ class PortfolioManager(object):
 
         print(
             "日期 : " + step_date.strftime("%Y-%m-%d") + "|",
-            "订单号 : " + orderid + "|",
+            #"订单号 : " + orderid + "|",
             "股票 : " + stock + "|",
             "买卖方向 : " + direction + "|",
             "报价 : " + str('%.2f' %price) + "|",
             "交易额 : " + str('%.2f' %(volume * price)) + "|",
-            "订单状态 : " + status + "|",
+            # "订单状态 : " + status + "|",
             "总资产 :  " + str('%.2f' %A.sum()) + "|"
         )
-
-
-
 
 
 class Portfolio_Prediction_Env(gym.GoalEnv):
@@ -566,6 +587,8 @@ class Portfolio_Prediction_Env(gym.GoalEnv):
 
     使用GoalEnv，因为observation是dict类型
     """
+    metadata = {'render.modes': ['human']}
+
     def __init__(self, config, 
                     calender, 
                     stock_history, 
@@ -591,6 +614,8 @@ class Portfolio_Prediction_Env(gym.GoalEnv):
             5.冻结资金一并算入总资产
             6.未来与vnpy的回测引擎对接，可以直接包装为一个backtester类，读取每日的订单并下单
         """
+        super(Portfolio_Prediction_Env, self).__init__()
+
         self.config = config
         self.stock_list = config['data']['stock_code']
         # 将calender转换为datetime
@@ -611,7 +636,7 @@ class Portfolio_Prediction_Env(gym.GoalEnv):
 
         if stop_trade_date is None:
             # 为指定停止训练的时间，默认一个交易年
-            self.decision_daterange = self.decision_daterange[:63]
+            self.decision_daterange = self.decision_daterange[:200]
         else :
             self.decision_daterange = [i for i in self.decision_daterange if i <= arrow.get(stop_trade_date, 'YYYYMMDD').date()]
         
@@ -634,13 +659,13 @@ class Portfolio_Prediction_Env(gym.GoalEnv):
                                                 stop_trade_date=self.decision_daterange[-1],
                                                 save=save)
         # 定义行为空间，offer的scale为100
-        action_space_shape = (2, self.n_asset + 1)
-        action_space_low = np.array([[0.0] * (self.n_asset + 1), [-10.0]* (self.n_asset + 1)])
-        action_space_high = np.array([[1.0] * (self.n_asset + 1), [10.0]* (self.n_asset + 1)])
+        action_space_shape = [(self.n_asset + 1) * 2,]
+        action_space_low = np.array([0.0] * (self.n_asset + 1) + [-10.0]* (self.n_asset + 1))
+        action_space_high = np.array([1.0] * (self.n_asset + 1) + [10.0]* (self.n_asset + 1))
         self.action_space = Box(low=action_space_low, high=action_space_high, )
 
         # 定义观察空间：(行情+预测, n_asset)
-        obs_space_shape = (self.quotation_mgr.quotation_shape[0] + self.quotation_mgr.prediction_shape[0], self.n_asset)
+        obs_space_shape = [(self.quotation_mgr.quotation_shape[0] + self.quotation_mgr.prediction_shape[0]) * self.n_asset]
         obs_space_low = -100 * np.ones(shape=obs_space_shape)
         obs_space_high = 100 * np.ones(shape=obs_space_shape)
         # 已经达到的目标：P，V，W
@@ -663,17 +688,20 @@ class Portfolio_Prediction_Env(gym.GoalEnv):
         self.reset()
 
 
-    def step(self, offer, W,):
+    def step(self, action,):
         """
         环境中前进一步，保存历史
         """
+        W = action[:self.n_asset + 1]
+        offer = action[- self.n_asset - 1:]
+
         step_date = [i for i in self.calender if i > self.current_date][0]
 
         quotation, prediction, info1 = self.quotation_mgr._step(step_date)
 
         P1, V1, W1, info2 = self.portfolio_mgr._step(offer, W, info1['high_low_price'], step_date)
 
-        obs = np.vstack((quotation, prediction))
+        obs = np.vstack((quotation, prediction)).reshape(-1)
         achieved_goal = np.vstack((P1, V1, W1))
 
         observation = {
@@ -685,10 +713,12 @@ class Portfolio_Prediction_Env(gym.GoalEnv):
         info = dict(info1, **info2)
         self.current_date = step_date
         info['current_date'] = self.current_date
+        if info['current_date'] >= self.decision_daterange[-1]:
+            info['done'] = True
 
         self.infos.append(info)
 
-        return obs, info['reward'], info, info['done']
+        return obs, info['accumulated_reward'], info['done'], info
 
 
     def reset(self,):
@@ -696,12 +726,12 @@ class Portfolio_Prediction_Env(gym.GoalEnv):
         self.current_date = self.decision_daterange[0]
         quotation, prediction, info1 = self.quotation_mgr._reset(self.current_date)
         P, V, W, info2 = self.portfolio_mgr._reset(self.current_date)
-        infos = info1 + info2
+        info = dict(info1, **info2)
         
         self.order_list = {}
-        self.infos = infos
+        self.infos = [info]
 
-        obs = np.vstack((quotation, prediction))
+        obs = np.vstack((quotation, prediction)).reshape(-1)
         achieved_goal = np.vstack((P, V, W))
 
         observation = {
@@ -710,16 +740,20 @@ class Portfolio_Prediction_Env(gym.GoalEnv):
             'desired_goal': P * V,
         }
 
-        return obs, self.infos
+        return obs
 
     def compute_reward(self, achieved_goal, desired_goal, info):
         """"""
-        return info['reward']
+        return info['reward']  
 
 
-    def render(self, mode='human'):
+    def render(self, mode='human', info=None):
         """"""
-        return super().render(mode=mode)
+        self.plot_notebook(info)
+
+    def close(self,):
+        """"""
+        return self.reset()
 
 
     def save_history(self,):
@@ -741,3 +775,127 @@ class Portfolio_Prediction_Env(gym.GoalEnv):
                     print("Add saving infos to %s" % save_path)
         except Exception as e:
             print(e)
+
+    def plot_notebook(self, close=False, info=None):
+        """Live plot using the jupyter notebook rendering of matplotlib."""
+
+        if close:
+            self._plot = self._plot2 = self._plot3 = None
+            return
+
+        df_info = pd.DataFrame(info)
+        df_info.index = pd.to_datetime(df_info["date"], unit='s')
+
+        # plot prices and performance
+        all_assets = ['BTCBTC'] + self.sim.asset_names
+        if not self._plot:
+            colors = [None] * len(all_assets) + ['black']
+            self._plot_dir = os.path.join(
+                self.log_dir, 'notebook_plot_prices_' + str(time.time())) if self.log_dir else None
+            self._plot = LivePlotNotebook(
+                log_dir=self._plot_dir, title='prices & performance', labels=all_assets + ["Portfolio"], ylabel='value', colors=colors)
+        x = df_info.index
+        y_portfolio = df_info["portfolio_value"]
+        y_assets = [df_info['price_' + name].cumprod()
+                    for name in all_assets]
+        self._plot.update(x, y_assets + [y_portfolio])
+
+        # plot portfolio weights
+        if not self._plot2:
+            self._plot_dir2 = os.path.join(
+                self.log_dir, 'notebook_plot_weights_' + str(time.time())) if self.log_dir else None
+            self._plot2 = LivePlotNotebook(
+                log_dir=self._plot_dir2, labels=all_assets, title='weights', ylabel='weight')
+        ys = [df_info['weight_' + name] for name in all_assets]
+        self._plot2.update(x, ys)
+
+        # plot portfolio costs
+        if not self._plot3:
+            self._plot_dir3 = os.path.join(
+                self.log_dir, 'notebook_plot_cost_' + str(time.time())) if self.log_dir else None
+            self._plot3 = LivePlotNotebook(
+                log_dir=self._plot_dir3, labels=['cost'], title='costs', ylabel='cost')
+        ys = [df_info['cost'].cumsum()]
+        self._plot3.update(x, ys)
+
+        if close:
+            self._plot = self._plot2 = self._plot3 = None
+
+
+class LivePlotNotebook(object):
+    """
+    Live plot using `%matplotlib notebook` in jupyter
+
+    Usage:
+    liveplot = LivePlotNotebook(labels=['a','b'])
+    x = range(10)
+    ya = np.random.random((10))
+    yb = np.random.random((10))
+    liveplot.update(x, [ya,yb])
+    """
+
+    def __init__(self, log_dir=None, episode=0, labels=[], title='', ylabel='returns', colors=None, linestyles=None, legend_outside=True):
+        if not matplotlib.rcParams['backend'] == 'nbAgg':
+            logging.warn(
+                "The liveplot callback only work when matplotlib is using the nbAgg backend. Execute 'matplotlib.use('nbAgg', force=True)'' or '%matplotlib notebook'")
+
+        self.log_dir = log_dir
+        if log_dir:
+            try:
+                os.makedirs(log_dir)
+            except OSError:
+                pass
+        self.i = episode
+
+        fig, ax = plt.subplots(1, 1)
+
+        for i in range(len(labels)):
+            ax.plot(
+                [0] * 20,
+                label=labels[i],
+                alpha=0.75,
+                lw=2,
+                color=colors[i] if colors else None,
+                linestyle=linestyles[i] if linestyles else None,
+            )
+
+        ax.set_xlim(0, 1)
+        ax.set_ylim(0, 1)
+        ax.set_xlabel('date')
+        ax.set_ylabel(ylabel)
+        ax.grid()
+        ax.set_title(title)
+
+        # give the legend it's own space, the right 20% where it right align left
+        if legend_outside:
+            fig.subplots_adjust(right=0.8)
+            ax.legend(loc='center left', bbox_to_anchor=(
+                1.0, 0.5), frameon=False)
+        else:
+            ax.legend()
+
+        self.ax = ax
+        self.fig = fig
+
+    def update(self, x, ys):
+        x = np.array(x)
+
+        for i in range(len(ys)):
+            # update price
+            line = self.ax.lines[i]
+            line.set_xdata(x)
+            line.set_ydata(ys[i])
+
+        # update limits
+        y = np.concatenate(ys)
+        y_extra = y.std() * 0.1
+        if x.min() != x.max():
+            self.ax.set_xlim(x.min(), x.max())
+        if (y.min() - y_extra) != (y.max() + y_extra):
+            self.ax.set_ylim(y.min() - y_extra, y.max() + y_extra)
+
+        if self.log_dir:
+            self.fig.savefig(os.path.join(
+                self.log_dir, '%i_liveplot.png' % self.i))
+        self.fig.canvas.draw()
+        self.i += 1

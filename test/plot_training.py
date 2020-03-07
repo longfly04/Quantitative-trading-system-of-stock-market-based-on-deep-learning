@@ -23,7 +23,7 @@ def plot_training(data):
     plt.plot(data['epoch_loss'], label='Training Loss',)
     plt.plot(data['epoch_val_loss'], label='Validation Loss',)
     plt.legend()
-
+    plt.savefig(os.path.join(sys.path[0],'saved_figures\\51_train_val_error.png'))
     plt.show()
 
 def load_data(file_path):
