@@ -1,7 +1,8 @@
 import json
 import os,sys
 sys.path.insert(0,'D:\\GitHub\\Quantitative-analysis-with-Deep-Learning\\quantitative_analysis_with_deep_learning')
-
+import random
+import arrow
 import pandas as pd 
 
 from preparation import prepare_train
@@ -24,14 +25,28 @@ def main():
         csv_files = search_file(results_path, item)
         data = pd.read_csv(csv_files[0])
         predict_results_dict[item] = data
-    
-    # 训练决策模型，初始化资金，得到
-    train_decision( config=config,
-                    save=True, 
-                    calender=calender, 
-                    history=history, 
-                    predict_results_dict=predict_results_dict,
-                    test_mode=False)
+
+    global_stop_date = arrow.get('20151230', 'YYYYMMDD')
+    global_start_date = calender[int(config['preprocess']['train_pct'] * len(calender))]
+    global_training_range = [i for i in calender if i <= global_stop_date and i >= global_start_date]
+    train_len = 200
+
+    # 随机在整个训练周期内挑选时间段训练，时间长度为200天
+    for _ in range(50):
+        choose_start = random.choice(global_training_range[:-train_len])
+        choose_range = [i for i in global_training_range if i >= choose_start][:train_len]
+
+        # 训练决策模型，初始化资金，得到
+        train_decision( config=config,
+                        save=True, 
+                        calender=calender, 
+                        history=history, 
+                        predict_results_dict=predict_results_dict,
+                        test_mode=False,
+                        start_date=choose_start.date(),
+                        stop_date=choose_range[-1].date(),
+                        load=True
+                        )
 
 
 

@@ -212,6 +212,7 @@ class QuotationManager(object):
         done = bool(step_date > self.stop_trade_date)
 
         info = {
+            "current_date":self.current_date,
             "high_low_price": high_low_price,
             "done":done
         }
@@ -471,9 +472,10 @@ class PortfolioManager(object):
                             }
         }
 
-        # 打印资产向量
-        #for k,v in info['asset_vector'].items():
-        #    print(k,':',v)
+        # 打印资产向量，逢5日打印一次
+        if step_date.day % 5 == 0:
+            print("日期：%s" %step_date.strftime('%Y%m%d'))
+            self.print_portfolio(info)
 
         # 如果损失大于阈值，则中断
         if accumulated_reward < 0.9:
@@ -580,6 +582,20 @@ class PortfolioManager(object):
             "总资产 :  " + str('%.2f' %A.sum()) + "|"
         )
 
+    def print_portfolio(self, info):
+        """"""
+        total = info['total_asset']
+        portfolio = info['asset_vector']['A1']
+        volume = info['asset_vector']['V1']
+        price = info['asset_vector']['P1']
+        asset_list = ['Position'] + self.stock_list
+
+        assert len(portfolio) == len(asset_list)
+        for a,p,v,pr in zip(asset_list, portfolio, volume, price):
+            print(a, ':\t', str(p), '\t 持有量：', v, '\t 现价：', pr)
+        print('Total: %f' %total)
+
+
 
 class Portfolio_Prediction_Env(gym.GoalEnv):
     """
@@ -629,16 +645,22 @@ class Portfolio_Prediction_Env(gym.GoalEnv):
         self.init_asset = init_asset
         self.tax_rate = tax_rate
 
-        if start_trade_date is not None:
+        # 指定交易开始时间，默认以配置文件设定的比例开始，最好是在历史数据中随机开始
+        if start_trade_date is None:
+            self.decision_daterange = self.calender[int(len(self.calender) * config['preprocess']['train_pct']) + self.window_len :]
+        elif isinstance(start_trade_date, str):
             self.decision_daterange = [i for i in self.calender if i >= arrow.get(start_trade_date, 'YYYYMMDD').date()]
         else:
-            self.decision_daterange = self.calender[int(len(self.calender) * config['preprocess']['train_pct']) + self.window_len :]
-
+            self.decision_daterange = [i for i in self.calender if i >= start_trade_date]
+            
+        # 指定交易结束时间，设定最大训练时长为250天
         if stop_trade_date is None:
             # 为指定停止训练的时间，默认一个交易年
             self.decision_daterange = self.decision_daterange[:200]
-        else :
+        elif isinstance(stop_trade_date, str):
             self.decision_daterange = [i for i in self.decision_daterange if i <= arrow.get(stop_trade_date, 'YYYYMMDD').date()]
+        else:
+            self.decision_daterange = [i for i in self.decision_daterange if i <= stop_trade_date]
         
         self.save = save
 

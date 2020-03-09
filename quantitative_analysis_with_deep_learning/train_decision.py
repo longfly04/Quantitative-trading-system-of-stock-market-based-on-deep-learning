@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd 
 import arrow
 import random
-
+import os,sys
 import gym
 from stable_baselines import PPO2, DDPG, PPO1, A2C
 from stable_baselines.common.noise import NormalActionNoise,OrnsteinUhlenbeckActionNoise, AdaptiveParamNoiseSpec
@@ -13,6 +13,8 @@ from portfolio_trade.env.custom_env import Portfolio_Prediction_Env, QuotationMa
 
 from stable_baselines.common.env_checker import check_env
 
+from utils.tools import search_file
+
 MODEL = 'DDPG'
 
 def train_decision( config=None, 
@@ -21,7 +23,9 @@ def train_decision( config=None,
                     calender=None, 
                     history=None, 
                     predict_results_dict=None, 
-                    test_mode=False):
+                    test_mode=False,
+                    start_date=None,
+                    stop_date=None):
     """
     训练决策模型，从数据库读取数据并进行决策训练
 
@@ -45,7 +49,8 @@ def train_decision( config=None,
                                     stock_history=history, 
                                     window_len=1, 
                                     prediction_history=predict_dict,
-                                    stop_trade_date='20150330',
+                                    start_trade_date=start_date,
+                                    stop_trade_date=stop_date,
                                     save=save)
     
     # 测试模式
@@ -69,7 +74,22 @@ def train_decision( config=None,
         param_noise = None
         action_noise = OrnsteinUhlenbeckActionNoise(mean=np.zeros(n_actions), sigma=float(0.5) * np.ones(n_actions))
         if load:
-            model = DDPG.load('DDPG')
+            model_path = search_file(os.path.join(sys.path[0],'ddpg'), 'DDPG')
+            if len(model_path) > 0:
+                model = DDPG.load(  model_path[0], 
+                                    env=env,
+                                    param_noise=param_noise,
+                                    action_noise=action_noise,
+                                    tensorboard_log='./tb_log',) # 没有指定env
+            else:
+                model = DDPG(   policy=DDPG_MlpPolicy,
+                                env=env,
+                                verbose=1,
+                                param_noise=param_noise,
+                                action_noise=action_noise,
+                                tensorboard_log='./tb_log',
+                            )
+
         else:
             model = DDPG(   policy=DDPG_MlpPolicy,
                             env=env,
@@ -79,14 +99,7 @@ def train_decision( config=None,
                             tensorboard_log='./tb_log',
                             )
         model.learn(total_timesteps=10000,)
-    elif MODEL == 'PPO1':
-        model = PPO1(MlpPolicy, 
-                    env, 
-                    verbose=1,
-                    tensorboard_log='./tb_log',
-                    )
-        model.learn(total_timesteps=10000)
-
+        model.save(os.path.join(sys.path[0],'ddpg/DDPG.h5'))
     obs = env.reset()
 
     for i in range(1000):

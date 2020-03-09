@@ -23,12 +23,12 @@ def main():
     with open('config.json', 'r', encoding='utf-8') as f:
         config = json.load(f)
     # 准备交易行情和日历
-    calender, history, all_quote = prepare_train(config, download=False)
+    calender, history, all_quote = prepare_train(config, download=True)
     # 训练预测模型，得到预测向量和风险向量
     predict_results_dict = train_forecasting(   config, 
                                                 calender=calender, 
                                                 history=history, 
-                                                forecasting_deadline='20150401')
+                                                forecasting_deadline='20151231')
     # 训练决策模型，初始化资金，得到
     '''
     train_decision( config=config,
