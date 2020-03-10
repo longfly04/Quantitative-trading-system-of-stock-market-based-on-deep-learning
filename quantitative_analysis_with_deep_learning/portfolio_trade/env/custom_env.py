@@ -653,7 +653,7 @@ class Portfolio_Prediction_Env(gym.GoalEnv):
         else:
             self.decision_daterange = [i for i in self.calender if i >= start_trade_date]
             
-        # 指定交易结束时间，设定最大训练时长为250天
+        # 指定交易结束时间，设定最大训练时长为200天
         if stop_trade_date is None:
             # 为指定停止训练的时间，默认一个交易年
             self.decision_daterange = self.decision_daterange[:200]
@@ -782,21 +782,44 @@ class Portfolio_Prediction_Env(gym.GoalEnv):
         """
         保存交易历史等
         """
-        import pickle
+        st_list = self.stock_list
 
-        save_path = os.path.join(self.config['prediction']['save_result_path'], 'infos.pickle')
-        
-        try:
-            if not os.path.exists(save_path):
-                with open(save_path, 'w', encoding='utf-8') as f:
-                    pickle.dumps(self.infos, f)
-                    print("Save infos to %s" % save_path)
-            else:
-                with open(save_path, 'a', encoding='utf-8') as f:
-                    pickle.dumps(self.infos, f)
-                    print("Add saving infos to %s" % save_path)
-        except Exception as e:
-            print(e)
+        # 统计表需要保存的列
+        statistics_keys = ['current_date', 'position', 'total_asset', 'reward', 'accumulated_reward', 'done']
+        # 资产表需要保存的列
+        portfolio_keys = ['current_date', 'P1', 'V1', 'W1', 'A1']
+        # 订单表需要保存的列
+        order_keys = ['current_date','orderid','stock','direction','price','volume','status']
+
+        statistics_df = pd.DataFrame()
+        for info in self.infos:
+            info_df = pd.DataFrame({k:v for k,v in info.items() if k in statistics_keys})
+            statistics_df = pd.concat((statistics_df, info_df), axis=0, ignore_index=True)
+
+        order_df = pd.DataFrame()
+        for info in self.infos:
+            keys = dict({k:v for k,v in info.items() if k in order_keys[0]}, **{k:v for k,v in info['order_list'].items() if k in order_keys[1:]})
+            info_df = pd.DataFrame(keys)
+            order_df = pd.concat((order_df, info_df), axis=0, ignore_index=True)
+
+        portfolio_df = pd.DataFrame()
+        for info in self.infos:
+            keys = {k:v for k,v in info['asset_vector'].items() if k in portfolio_keys[1:]}
+            flatten_keys = {}
+            for k,v in keys.items():
+                assert len(st_list) == len(v) - 1
+                flatten_keys = dict({k+'_'+col:item for col,item in zip(st_list, v[1:])},flatten_keys)
+            info_df = pd.DataFrame(flatten_keys)
+            portfolio_df = pd.concat((portfolio_df, info_df), axis=0, ignore_index=True)
+
+        now = arrow.now().format('YYYYMMDD-HHmmss')
+        save_path = os.path.join(sys.path[0], 'output')
+        tag = "from" + self.decision_daterange[0].strftime("%Y%m%d") + 'to' + self.decision_daterange[-1].strftime("%Y%m%d")
+        statistics_df.to_csv(save_path + tag + '_statistics_' + now)
+        order_df.to_csv(save_path + tag + '_order_' + now)
+        portfolio_df.to_csv(save_path + tag +'_portfolio_' + now)
+
+        return statistics_df, order_df, portfolio_df
 
     def plot_notebook(self, close=False, info=None):
         """Live plot using the jupyter notebook rendering of matplotlib."""

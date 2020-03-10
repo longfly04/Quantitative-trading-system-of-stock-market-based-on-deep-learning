@@ -29,6 +29,7 @@
 	},
 	"training":{
 		"train":true,
+		"train_deadline":"20160701",
 		"epochs":3,
 		"batch_size":32,
 		"save_model_path":"quantitative_analysis_with_deep_learning\\saved_models",

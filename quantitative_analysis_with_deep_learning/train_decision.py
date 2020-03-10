@@ -100,14 +100,15 @@ def train_decision( config=None,
                             )
         model.learn(total_timesteps=10000,)
         model.save(os.path.join(sys.path[0],'ddpg/DDPG.h5'))
+        
     obs = env.reset()
-
+    # 实测模式
     for i in range(1000):
         action, _states = model.predict(obs)
         obs, reward, done, info  = env.step(action)
-        env.render(info=info)
+        # env.render(info=info)
         if done:
-            # env.save_history()
+            env.save_history()
             env.reset()
             break
 
