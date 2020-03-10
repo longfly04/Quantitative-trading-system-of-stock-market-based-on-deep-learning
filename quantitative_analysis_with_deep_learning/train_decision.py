@@ -98,9 +98,10 @@ def train_decision( config=None,
                             action_noise=action_noise,
                             tensorboard_log='./tb_log',
                             )
-        model.learn(total_timesteps=10000,)
+        # 训练步数
+        model.learn(total_timesteps=1000,)
         model.save(os.path.join(sys.path[0],'ddpg/DDPG.h5'))
-        
+
     obs = env.reset()
     # 实测模式
     for i in range(1000):

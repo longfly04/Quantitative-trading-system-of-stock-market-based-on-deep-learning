@@ -793,24 +793,33 @@ class Portfolio_Prediction_Env(gym.GoalEnv):
 
         statistics_df = pd.DataFrame()
         for info in self.infos:
-            info_df = pd.DataFrame({k:v for k,v in info.items() if k in statistics_keys})
-            statistics_df = pd.concat((statistics_df, info_df), axis=0, ignore_index=True)
+            try:
+                info_df = pd.DataFrame({k:v for k,v in info.items() if k in statistics_keys}, index=[info['current_date']])
+                statistics_df = pd.concat((statistics_df, info_df), axis=0, ignore_index=True)
+            except Exception as e:
+                print(e)
 
         order_df = pd.DataFrame()
         for info in self.infos:
-            keys = dict({k:v for k,v in info.items() if k in order_keys[0]}, **{k:v for k,v in info['order_list'].items() if k in order_keys[1:]})
-            info_df = pd.DataFrame(keys)
-            order_df = pd.concat((order_df, info_df), axis=0, ignore_index=True)
+            try:
+                keys = dict({k:v for k,v in info.items() if k in order_keys[0]}, **{k:v for k,v in info['order_list'].items() if k in order_keys[1:]})
+                info_df = pd.DataFrame(keys,index=[info['current_date']])
+                order_df = pd.concat((order_df, info_df), axis=0, ignore_index=True)
+            except Exception as e:
+                print(e)
 
         portfolio_df = pd.DataFrame()
         for info in self.infos:
-            keys = {k:v for k,v in info['asset_vector'].items() if k in portfolio_keys[1:]}
-            flatten_keys = {}
-            for k,v in keys.items():
-                assert len(st_list) == len(v) - 1
-                flatten_keys = dict({k+'_'+col:item for col,item in zip(st_list, v[1:])},flatten_keys)
-            info_df = pd.DataFrame(flatten_keys)
-            portfolio_df = pd.concat((portfolio_df, info_df), axis=0, ignore_index=True)
+            try:
+                keys = {k:v for k,v in info['asset_vector'].items() if k in portfolio_keys[1:]}
+                flatten_keys = {}
+                for k,v in keys.items():
+                    assert len(st_list) == len(v) - 1
+                    flatten_keys = dict({k+'_'+col:item for col,item in zip(st_list, v[1:])},**flatten_keys)
+                info_df = pd.DataFrame(flatten_keys,index=[info['current_date']])
+                portfolio_df = pd.concat((portfolio_df, info_df), axis=0, ignore_index=True)
+            except Exception as e:
+                print(e)
 
         now = arrow.now().format('YYYYMMDD-HHmmss')
         save_path = os.path.join(sys.path[0], 'output')

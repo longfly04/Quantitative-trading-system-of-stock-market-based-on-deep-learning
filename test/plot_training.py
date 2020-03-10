@@ -34,6 +34,10 @@ def load_data(file_path):
 
     return plot_data
 
+def plot_output():
+    """"""
+    
+
 def main():
     for path in search_file('D:\\GitHub\\Quantitative-analysis-with-Deep-Learning\\quantitative_analysis_with_deep_learning\\saved_results', '.csv'):
         data = load_data(path)
