@@ -39,9 +39,12 @@ def main():
         choose_start = random.choice(global_training_range[:-train_len])
         choose_range = [i for i in global_training_range if i >= choose_start][:train_len]
 
+        # 每隔5次训练保存一次结果
+        save_or_not = True if _ % 5 == 4 else False
+
         # 训练决策模型，初始化资金，得到
         train_decision( config=config,
-                        save=True, 
+                        save=save_or_not, 
                         calender=calender, 
                         history=history, 
                         predict_results_dict=predict_results_dict,

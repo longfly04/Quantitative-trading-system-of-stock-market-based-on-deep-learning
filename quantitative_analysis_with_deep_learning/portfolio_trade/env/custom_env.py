@@ -531,6 +531,12 @@ class PortfolioManager(object):
     def order_process(self, order:Order, high_low):
         """
         处理订单
+
+        订单状态说明：
+            买单如果资金不足，被标记为REJECT（拒单）
+            卖单和资金充足的买单，提交的状态为SUBMIT
+            判断报价不合理的，标记为CANCEL（已撤销）
+            SUBMIT的订单，报价在最高最低价之间，合理成交之后，标记为TRADE
         """
         process_order = order
         info = order.get_info()
@@ -797,7 +803,7 @@ class Portfolio_Prediction_Env(gym.GoalEnv):
                 info_df = pd.DataFrame({k:v for k,v in info.items() if k in statistics_keys}, index=[info['current_date']])
                 statistics_df = pd.concat((statistics_df, info_df), axis=0, ignore_index=False)
             except Exception as e:
-                # print(e)
+                print(e)
                 pass
 
         order_df = pd.DataFrame()
@@ -808,31 +814,32 @@ class Portfolio_Prediction_Env(gym.GoalEnv):
                     keys['direction'] = keys['direction'].value
                     keys['status'] = keys['status'].value
                     keys[order_keys[0]] = info[order_keys[0]]
-                    info_df = pd.DataFrame(keys, index=[keys[order_keys[0]], keys['orderid'] ])
-                    order_df = pd.concat((order_df, info_df), axis=0, ignore_index=False)
+                    info_df = pd.DataFrame(keys, index=[0])
+                    order_df = pd.concat((order_df, info_df), axis=0, ignore_index=True)
             except Exception as e:
-                # print(e)
+                print(e)
                 pass
 
         portfolio_df = pd.DataFrame()
         for info in self.infos:
             try:
-                keys = {k:v for k,v in info['asset_vector'].items() if k in portfolio_keys[1:]}
                 flatten_keys = {}
-                for k,v in keys.items():
-                    assert len(st_list) == len(v) - 1
-                    flatten_keys = dict({k+'_'+col:item for col,item in zip(st_list, v[1:])},**flatten_keys)
-                info_df = pd.DataFrame(flatten_keys,index=[info['current_date']])
-                portfolio_df = pd.concat((portfolio_df, info_df), axis=0, ignore_index=True)
+                for vec,v in info['asset_vector'].items():
+                    assert len(st_list) + 1 == len(v)
+                    flatten_keys = dict({vec+'_'+name:element for name,element in zip(['position'] + st_list, v)}, **flatten_keys)
+                info_df = pd.DataFrame(flatten_keys, index=[info['current_date']])
+                portfolio_df = pd.concat((portfolio_df, info_df), axis=0, ignore_index=False)
             except Exception as e:
                 print(e)
 
         now = arrow.now().format('YYYYMMDD-HHmmss')
         save_path = os.path.join(sys.path[0], 'output')
-        tag = "from" + self.decision_daterange[0].strftime("%Y%m%d") + 'to' + self.decision_daterange[-1].strftime("%Y%m%d")
-        statistics_df.to_csv(save_path + tag + '_statistics_' + now)
-        order_df.to_csv(save_path + tag + '_order_' + now)
-        portfolio_df.to_csv(save_path + tag +'_portfolio_' + now)
+        tag = "from-" + self.decision_daterange[0].strftime("%Y%m%d") + '-to-' + self.decision_daterange[-1].strftime("%Y%m%d")
+        statistics_df.to_csv(os.path.join(save_path, 'statistics_' + tag + '_' + now + '.csv'))
+        order_df.to_csv(os.path.join(save_path, 'order_' + tag + '_' + now + '.csv'))
+        portfolio_df.to_csv(os.path.join(save_path, 'portfolio_' + tag + '_' + now + '.csv'))
+
+        print('Env trading status %s is saved to %s' %(tag, save_path))
 
         return statistics_df, order_df, portfolio_df
 

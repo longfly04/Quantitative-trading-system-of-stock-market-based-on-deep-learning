@@ -109,7 +109,8 @@ def train_decision( config=None,
         obs, reward, done, info  = env.step(action)
         # env.render(info=info)
         if done:
-            env.save_history()
+            if save:
+                env.save_history()
             env.reset()
             break
 
