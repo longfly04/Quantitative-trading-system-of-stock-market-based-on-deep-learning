@@ -786,27 +786,33 @@ class Portfolio_Prediction_Env(gym.GoalEnv):
 
         # 统计表需要保存的列
         statistics_keys = ['current_date', 'position', 'total_asset', 'reward', 'accumulated_reward', 'done']
-        # 资产表需要保存的列
-        portfolio_keys = ['current_date', 'P1', 'V1', 'W1', 'A1']
         # 订单表需要保存的列
         order_keys = ['current_date','orderid','stock','direction','price','volume','status']
+        # 资产表需要保存的列
+        portfolio_keys = ['current_date', 'P1', 'V1', 'W1', 'A1']
 
         statistics_df = pd.DataFrame()
         for info in self.infos:
             try:
                 info_df = pd.DataFrame({k:v for k,v in info.items() if k in statistics_keys}, index=[info['current_date']])
-                statistics_df = pd.concat((statistics_df, info_df), axis=0, ignore_index=True)
+                statistics_df = pd.concat((statistics_df, info_df), axis=0, ignore_index=False)
             except Exception as e:
-                print(e)
+                # print(e)
+                pass
 
         order_df = pd.DataFrame()
         for info in self.infos:
             try:
-                keys = dict({k:v for k,v in info.items() if k in order_keys[0]}, **{k:v for k,v in info['order_list'].items() if k in order_keys[1:]})
-                info_df = pd.DataFrame(keys,index=[info['current_date']])
-                order_df = pd.concat((order_df, info_df), axis=0, ignore_index=True)
+                for st,o in info['order_list'].items():
+                    keys ={k:v for k,v in o.get_info().items()}
+                    keys['direction'] = keys['direction'].value
+                    keys['status'] = keys['status'].value
+                    keys[order_keys[0]] = info[order_keys[0]]
+                    info_df = pd.DataFrame(keys, index=[keys[order_keys[0]], keys['orderid'] ])
+                    order_df = pd.concat((order_df, info_df), axis=0, ignore_index=False)
             except Exception as e:
-                print(e)
+                # print(e)
+                pass
 
         portfolio_df = pd.DataFrame()
         for info in self.infos:

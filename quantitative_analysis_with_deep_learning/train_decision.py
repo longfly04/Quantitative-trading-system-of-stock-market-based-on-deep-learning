@@ -99,7 +99,7 @@ def train_decision( config=None,
                             tensorboard_log='./tb_log',
                             )
         # 训练步数
-        model.learn(total_timesteps=1000,)
+        model.learn(total_timesteps=100,)
         model.save(os.path.join(sys.path[0],'ddpg/DDPG.h5'))
 
     obs = env.reset()
