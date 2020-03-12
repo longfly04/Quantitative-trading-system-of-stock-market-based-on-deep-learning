@@ -445,11 +445,37 @@ class PortfolioManager(object):
                         # 资金不够，被拒绝的订单也增加到列表中，便于记录
                         order = Order(stock_symbol=stock_i, direction=BUY, price=price, volume=volume, status=REJECT)
                         self.order_list[stock_i] = order
-        
+
+        # 尝试的总步数
+        steps = len(self.infos) + 1
+
         # log奖励函数,
         reward = np.log(A1.sum()/A0.sum())
-        # 积累奖励函数
-        accumulated_reward = A1.sum()/self.init_asset            
+        # 积累奖励函数，经验证，需要使用积累奖励函数才能学到
+        accumulated_reward = A1.sum()/self.init_asset
+        
+        # 含有势能函数的积累奖励，势能是本次step获得的奖励增益
+        accumulated_reward_with_potential = accumulated_reward + np.log(1 + (A1.sum() - A0.sum()) / A0.sum())
+
+        # 计算风险指标：最大回撤和夏普比率
+        accumulated_reward_list = [i['accumulated_reward'] for i in self.infos] + [accumulated_reward]
+        # 夏普
+        sharpe_of_reward = sharpe(accumulated_reward_list)
+        # 最大回撤
+        mdd_of_reward = max_drawdown(accumulated_reward_list)
+        # 衰减系数： 
+        # 0.999 在200步时衰减为0.81， 0.998 在200步时衰减为0.67， 0.995在200步时衰减为0.366
+        # 0.995 在100步时衰减为0.60， 0.99 在100步衰减为0.366
+        gamma = 0.99
+
+        # 含有MDD风险指标的奖励函数，积累奖励为带积累奖励函数
+        accumulated_reward_with_mdd = accumulated_reward / (1 + mdd_of_reward * gamma ** steps)
+
+        # 目标导向奖励 1.6为160%的收益率
+        target = 1.6
+        # 使用算数平均值，势能奖励较容易获得高额收益，MDD风险奖励较容易实现小的回撤
+        # 在初始值1和目标target之间，使用算数平均值平均势能奖励和MDD风险奖励
+        self.target_reward = accumulated_reward_with_potential * (target - self.target_reward)/(target - 1) + accumulated_reward_with_mdd * (self.target_reward - 1)/(target - 1)
 
         info = {
             "order_history":order_history,          # 今日成交订单
@@ -458,6 +484,11 @@ class PortfolioManager(object):
             "total_asset":A1.sum(),
             "reward":reward,
             "accumulated_reward":accumulated_reward,
+            "accumulated_reward_with_potential":accumulated_reward_with_potential,
+            "sharpe_of_reward":sharpe_of_reward,
+            "mdd_of_reward":mdd_of_reward,
+            "accumulated_reward_with_mdd":accumulated_reward_with_mdd,
+            "target_reward":self.target_reward,
             "asset_vector":{
                             "P1":P1, 
                             "V1":V1, 
@@ -509,6 +540,9 @@ class PortfolioManager(object):
         self.A0 = self.P0 * self.V0
         # 定义资产分配比例
         self.W0 = self.A0 / self.A0.sum()
+
+        # 初始化目标导向奖励为1
+        self.target_reward = 1
 
         return self.P0, self.V0, self.W0, info
 
@@ -746,7 +780,7 @@ class Portfolio_Prediction_Env(gym.GoalEnv):
 
         self.infos.append(info)
 
-        return obs, info['reward'] * 100, info['done'], info
+        return obs, info['target_reward'], info['done'], info
 
 
     def reset(self,):
@@ -791,7 +825,9 @@ class Portfolio_Prediction_Env(gym.GoalEnv):
         st_list = self.stock_list
 
         # 统计表需要保存的列
-        statistics_keys = ['current_date', 'position', 'total_asset', 'reward', 'accumulated_reward', 'done']
+        statistics_keys = ['current_date', 'position', 'total_asset', 'reward', 'accumulated_reward', 'done',
+                            "accumulated_reward_with_potential","sharpe_of_reward","mdd_of_reward",
+                            "accumulated_reward_with_mdd","target_reward"]
         # 订单表需要保存的列
         order_keys = ['current_date','orderid','stock','direction','price','volume','status']
         # 资产表需要保存的列
@@ -966,3 +1002,27 @@ class LivePlotNotebook(object):
                 self.log_dir, '%i_liveplot.png' % self.i))
         self.fig.canvas.draw()
         self.i += 1
+
+
+
+def sharpe(returns, freq=30, rfr=0.0):
+    """
+    夏普比率
+    Given a set of returns, calculates naive (rfr=0) sharpe (eq 28) 
+    """
+    return (np.sqrt(freq) * np.mean(returns)) / (np.std(returns) + 1e-7)
+
+
+def max_drawdown(X):
+    """
+    最大回撤率
+    """
+    mdd = 0
+    peak = X[0]
+    for x in X:
+        if x > peak:
+            peak = x
+        dd = (peak - x) / peak
+        if dd > mdd:
+            mdd = dd
+    return mdd

@@ -4,18 +4,20 @@ import arrow
 import random
 import os,sys
 import gym
-from stable_baselines import PPO2, DDPG, PPO1, A2C
+
+from stable_baselines import DDPG, PPO1, TD3
 from stable_baselines.common.noise import NormalActionNoise,OrnsteinUhlenbeckActionNoise, AdaptiveParamNoiseSpec
 from stable_baselines.common.vec_env import DummyVecEnv
 from stable_baselines.common.policies import MlpPolicy, LstmPolicy
 from stable_baselines.ddpg.policies import MlpPolicy as DDPG_MlpPolicy
-from portfolio_trade.env.custom_env import Portfolio_Prediction_Env, QuotationManager, PortfolioManager
-
+from stable_baselines.td3.policies import MlpPolicy as TD3_MlpPolicy
 from stable_baselines.common.env_checker import check_env
+from portfolio_trade.policy.custom_policy import CustomDDPGPolicy
+
+from portfolio_trade.env.custom_env import Portfolio_Prediction_Env, QuotationManager, PortfolioManager
 
 from utils.tools import search_file
 
-MODEL = 'DDPG'
 
 def train_decision( config=None, 
                     save=False, 
@@ -26,7 +28,8 @@ def train_decision( config=None,
                     test_mode=False,
                     start_date=None,
                     stop_date=None,
-                    episode_steps=1000):
+                    episode_steps=1000,
+                    model='DDPG'):
     """
     训练决策模型，从数据库读取数据并进行决策训练
 
@@ -39,6 +42,9 @@ def train_decision( config=None,
         predict_results_dict：预测结果信息
     """
     # 首先处理预测数据中字符串日期
+
+    MODEL = model
+
     predict_dict = {}
     for k,v in predict_results_dict.items():
         assert isinstance(v['predict_date'].iloc[0], str)
@@ -73,18 +79,20 @@ def train_decision( config=None,
         # 添加噪声
         n_actions = env.action_space.shape
         param_noise = None
+        # 适合于惯性系统控制的OU噪声
         action_noise = OrnsteinUhlenbeckActionNoise(mean=np.zeros(n_actions), sigma=float(0.5) * np.ones(n_actions))
         if load:
             model_path = search_file(os.path.join(sys.path[0],'ddpg'), 'DDPG')
             if len(model_path) > 0:
                 model = DDPG.load(  model_path[0], 
                                     env=env,
+                                    policy=CustomDDPGPolicy,
                                     param_noise=param_noise,
                                     action_noise=action_noise,
                                     # tensorboard_log='./tb_log',
                                     ) # 没有指定env
             else:
-                model = DDPG(   policy=DDPG_MlpPolicy,
+                model = DDPG(   policy=CustomDDPGPolicy,
                                 env=env,
                                 verbose=1,
                                 param_noise=param_noise,
@@ -93,7 +101,7 @@ def train_decision( config=None,
                             )
 
         else:
-            model = DDPG(   policy=DDPG_MlpPolicy,
+            model = DDPG(   policy=CustomDDPGPolicy,
                             env=env,
                             verbose=1,
                             param_noise=param_noise,
@@ -102,7 +110,31 @@ def train_decision( config=None,
                             )
         # 训练步数
         model.learn(total_timesteps=episode_steps,)
-        model.save(os.path.join(sys.path[0],'ddpg/DDPG.h5'))
+        model.save(os.path.join(sys.path[0],'saved_models',MODEL,'DDPG.h5'))
+
+    elif MODEL == 'PPO1':
+        if load:
+            model_path = search_file(os.path.join(sys.path[0],'ppo1'), 'PPO1')
+            if len(model_path) > 0:
+                model = PPO1.load(  model_path[0], 
+                                    env=env,
+                                    ) 
+            else:
+                model = PPO1(   policy=LstmPolicy,
+                                env=env,
+                                verbose=1,
+                                # tensorboard_log='./tb_log',
+                            )
+
+        else:
+            model = PPO1(   policy=LstmPolicy,
+                            env=env,
+                            verbose=1,
+                            # tensorboard_log='./tb_log',
+                            )
+        # 训练步数
+        model.learn(total_timesteps=episode_steps,)
+        model.save(os.path.join(sys.path[0],'saved_models',MODEL,'PPO1.h5'))
 
     obs = env.reset()
     # 实测模式

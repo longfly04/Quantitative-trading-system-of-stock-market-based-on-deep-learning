@@ -13,7 +13,7 @@ def main():
     """"""
     path = os.path.join(sys.path[0], 'output')
     # 存档路径
-    archive_path = os.path.join(path, '0312')
+    archive_path = os.path.join(path, '031202')
     # 以上证50为参考
     ref_index = search_file(path, '000016.SH')
 
@@ -49,7 +49,7 @@ def plot_statistics(data_list=None, reference=None):
     # 绘制各个数据的增长情况
     for data,_ in zip(data_list, range(len(data_list))):
         data.set_index(pd.Series([arrow.get(j, 'YYYY-MM-DD').date() for j in data['current_date'].values]), inplace=True)
-        plt.plot(data[plot_data_col[0]], alpha=0.5 , label='Training %d iterations' %((_+1)*50000))
+        plt.plot(data[plot_data_col[0]], alpha=0.5 , label='Training %d iterations' %((_+1)*25000))
         if data.index.values[0] < index_low:
             index_low = data.index.values[0]
         if data.index.values[-1] > index_high:
@@ -57,7 +57,8 @@ def plot_statistics(data_list=None, reference=None):
     plt.legend()
     # 绘制参考的上证综指情况
     plot_index = reference.loc[index_low:index_high]
-    plt.plot(plot_index['close'] / plot_index['close'].loc[index_low] )
+    plt.plot(plot_index['close'] / plot_index['close'].loc[index_low] ,label='SH50 Index')
+    plt.legend()
     save_path = os.path.join(sys.path[0], 'saved_figures')
     plt.savefig(os.path.join(save_path,'61_Growth_in_total_assets.png'))
     plt.show()

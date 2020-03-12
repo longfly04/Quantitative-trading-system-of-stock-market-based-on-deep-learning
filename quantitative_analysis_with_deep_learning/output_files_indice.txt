@@ -1,0 +1,14 @@
+ddpg文件夹、ppo文件件、td3文件夹和output文件夹中，分别为模型的训练好的参数和模型的测试输出，分别代表不同超参数、奖励函数、算法之间的比较，使用本文件记录模型的组合。
+
+0310：
+	原始DDPG，	原始policy：Mlp [64,64]，	accumulated reward，	timesteps：50 * 10000
+0311：
+	原始DDPG，	原始policy：Mlp [64,64]，	accumulated reward，	timesteps：50 * 1000
+0312：
+	原始DDPG，	原始policy：Mlp [64,64]，	step reward，		timesteps：50 * 10000
+031201：
+	原始DDPG，	原始policy：Mlp [64,64]，	accumulated reward with potential，	timesteps：50 * 1000
+031202：
+	原始DDPG，	Deep policy：Mlp [128,128, 64, 64]，	accumulated reward with potential and mdd（decay rate 0.99），	timesteps：50 * 1000
+031203：
+	原始DDPG，	Deep policy：Mlp [128,128, 64, 64]，	target reward: target=1.6，	timesteps：50 * 15000
