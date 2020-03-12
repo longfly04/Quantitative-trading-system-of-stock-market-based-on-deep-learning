@@ -27,8 +27,8 @@ def main():
         predict_results_dict[item] = data
 
     # 全局训练范围，在这个范围内随机指定时间段进行训练
-    # global_stop_date = arrow.get(config['training']['train_deadline'], 'YYYYMMDD')
-    global_stop_date = arrow.get('20151231', 'YYYYMMDD')
+    global_stop_date = arrow.get(config['training']['train_deadline'], 'YYYYMMDD')
+    # global_stop_date = arrow.get('20151231', 'YYYYMMDD')
     global_start_date = calender[int(config['preprocess']['train_pct'] * len(calender))]
     global_training_range = [i for i in calender if i < global_stop_date and i >= global_start_date]
     # 约定决策训练的时间长度
@@ -51,7 +51,8 @@ def main():
                         test_mode=False,
                         start_date=choose_start.date(),
                         stop_date=choose_range[-1].date(),
-                        load=True
+                        load=True,
+                        episode_steps=10000
                         )
 
 

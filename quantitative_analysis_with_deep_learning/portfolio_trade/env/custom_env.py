@@ -746,7 +746,7 @@ class Portfolio_Prediction_Env(gym.GoalEnv):
 
         self.infos.append(info)
 
-        return obs, info['accumulated_reward'], info['done'], info
+        return obs, info['reward'] * 100, info['done'], info
 
 
     def reset(self,):

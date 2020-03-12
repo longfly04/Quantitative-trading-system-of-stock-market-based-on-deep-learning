@@ -25,7 +25,8 @@ def train_decision( config=None,
                     predict_results_dict=None, 
                     test_mode=False,
                     start_date=None,
-                    stop_date=None):
+                    stop_date=None,
+                    episode_steps=1000):
     """
     训练决策模型，从数据库读取数据并进行决策训练
 
@@ -80,14 +81,15 @@ def train_decision( config=None,
                                     env=env,
                                     param_noise=param_noise,
                                     action_noise=action_noise,
-                                    tensorboard_log='./tb_log',) # 没有指定env
+                                    # tensorboard_log='./tb_log',
+                                    ) # 没有指定env
             else:
                 model = DDPG(   policy=DDPG_MlpPolicy,
                                 env=env,
                                 verbose=1,
                                 param_noise=param_noise,
                                 action_noise=action_noise,
-                                tensorboard_log='./tb_log',
+                                # tensorboard_log='./tb_log',
                             )
 
         else:
@@ -96,10 +98,10 @@ def train_decision( config=None,
                             verbose=1,
                             param_noise=param_noise,
                             action_noise=action_noise,
-                            tensorboard_log='./tb_log',
+                            # tensorboard_log='./tb_log',
                             )
         # 训练步数
-        model.learn(total_timesteps=100,)
+        model.learn(total_timesteps=episode_steps,)
         model.save(os.path.join(sys.path[0],'ddpg/DDPG.h5'))
 
     obs = env.reset()
