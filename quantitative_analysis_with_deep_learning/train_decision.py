@@ -127,6 +127,10 @@ def train_decision( config=None,
         model.learn(total_timesteps=episode_steps,)
         model.save(os.path.join(sys.path[0],'saved_models',MODEL, MODEL + '.h5'))
 
+    elif MODEL == "HER":
+        """"""
+        
+
     obs = env.reset()
     # 实测模式
     for i in range(1000):

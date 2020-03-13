@@ -5,12 +5,17 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import pandas as pd 
 import numpy as np 
+import json
 
 from utils.tools import search_file
 
 
 def main():
     """"""
+
+    with open('config.json', 'r', encoding='utf-8') as f:
+        config = json.load(f)
+    
     path = os.path.join(sys.path[0], 'output')
     # 存档路径
     archive_path = os.path.join(path, '031301')
@@ -75,7 +80,15 @@ def plot_statistics(data_list=None, reference=None):
 def plot_portfolio(data_list=None):
     """
     资产向量变化
+
+    使用seaborn facegrid
     """
+
+
+    for data in data_list:
+        x = data.index.values
+
+
 
 def plot_order(data_list=None):
     """
