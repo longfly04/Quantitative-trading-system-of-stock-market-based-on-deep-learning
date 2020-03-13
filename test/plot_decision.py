@@ -13,7 +13,7 @@ def main():
     """"""
     path = os.path.join(sys.path[0], 'output')
     # 存档路径
-    archive_path = os.path.join(path, '031202')
+    archive_path = os.path.join(path, '031301')
     # 以上证50为参考
     ref_index = search_file(path, '000016.SH')
 

@@ -641,7 +641,8 @@ class Portfolio_Prediction_Env(gym.GoalEnv):
     """
     基于股市预测的组合资产管理模拟环境
 
-    使用GoalEnv，因为observation是dict类型
+    GoalEnv适用于奖励稀疏的环境，
+
     """
     metadata = {'render.modes': ['human']}
 
@@ -650,7 +651,7 @@ class Portfolio_Prediction_Env(gym.GoalEnv):
                     stock_history, 
                     prediction_history, 
                     init_asset=100000.0,
-                    tax_rate=0.0025,
+                    tax_rate=0.001,
                     window_len=1, 
                     start_trade_date=None,
                     stop_trade_date=None,
@@ -739,7 +740,10 @@ class Portfolio_Prediction_Env(gym.GoalEnv):
         desired_goal_low = np.zeros(shape=desired_goal_shape)
         desired_goal_high = self.init_asset * np.ones(shape=desired_goal_shape)
 
+        
         self.observation_space = Box(low=obs_space_low, high=obs_space_high,)
+
+        # 使用GoalEnv时，需要定义achieved_goal，和desired_goal，仅在HER算法下使用
         '''
         self.observation_space = Dict({
             'observation':Box(low=obs_space_low, high=obs_space_high,), 
@@ -780,7 +784,7 @@ class Portfolio_Prediction_Env(gym.GoalEnv):
 
         self.infos.append(info)
 
-        return obs, info['target_reward'], info['done'], info
+        return obs, info['accumulated_reward_with_potential'], info['done'], info
 
 
     def reset(self,):

@@ -12,7 +12,7 @@ from stable_baselines.common.policies import MlpPolicy, LstmPolicy
 from stable_baselines.ddpg.policies import MlpPolicy as DDPG_MlpPolicy
 from stable_baselines.td3.policies import MlpPolicy as TD3_MlpPolicy
 from stable_baselines.common.env_checker import check_env
-from portfolio_trade.policy.custom_policy import CustomDDPGPolicy
+from portfolio_trade.policy.custom_policy import CustomDDPGPolicy, CustomTD3Policy
 
 from portfolio_trade.env.custom_env import Portfolio_Prediction_Env, QuotationManager, PortfolioManager
 
@@ -81,60 +81,51 @@ def train_decision( config=None,
         param_noise = None
         # 适合于惯性系统控制的OU噪声
         action_noise = OrnsteinUhlenbeckActionNoise(mean=np.zeros(n_actions), sigma=float(0.5) * np.ones(n_actions))
-        if load:
-            model_path = search_file(os.path.join(sys.path[0],'ddpg'), 'DDPG')
-            if len(model_path) > 0:
-                model = DDPG.load(  model_path[0], 
-                                    env=env,
-                                    policy=CustomDDPGPolicy,
-                                    param_noise=param_noise,
-                                    action_noise=action_noise,
-                                    # tensorboard_log='./tb_log',
-                                    ) # 没有指定env
-            else:
-                model = DDPG(   policy=CustomDDPGPolicy,
-                                env=env,
-                                verbose=1,
-                                param_noise=param_noise,
-                                action_noise=action_noise,
-                                # tensorboard_log='./tb_log',
-                            )
-
-        else:
-            model = DDPG(   policy=CustomDDPGPolicy,
+        
+        model_path = search_file(os.path.join(sys.path[0],'saved_models', MODEL), MODEL)
+        if len(model_path) > 0 and load:
+            model = DDPG.load(  model_path[0], 
                             env=env,
-                            verbose=1,
+                            policy=CustomDDPGPolicy,
                             param_noise=param_noise,
                             action_noise=action_noise,
                             # tensorboard_log='./tb_log',
-                            )
-        # 训练步数
-        model.learn(total_timesteps=episode_steps,)
-        model.save(os.path.join(sys.path[0],'saved_models',MODEL,'DDPG.h5'))
-
-    elif MODEL == 'PPO1':
-        if load:
-            model_path = search_file(os.path.join(sys.path[0],'ppo1'), 'PPO1')
-            if len(model_path) > 0:
-                model = PPO1.load(  model_path[0], 
-                                    env=env,
-                                    ) 
-            else:
-                model = PPO1(   policy=LstmPolicy,
-                                env=env,
-                                verbose=1,
-                                # tensorboard_log='./tb_log',
-                            )
-
+                            ) 
         else:
-            model = PPO1(   policy=LstmPolicy,
-                            env=env,
-                            verbose=1,
-                            # tensorboard_log='./tb_log',
-                            )
+            model = DDPG(policy=CustomDDPGPolicy,
+                        env=env,
+                        verbose=1,
+                        param_noise=param_noise,
+                        action_noise=action_noise,
+                        # tensorboard_log='./tb_log',
+                        )
         # 训练步数
         model.learn(total_timesteps=episode_steps,)
-        model.save(os.path.join(sys.path[0],'saved_models',MODEL,'PPO1.h5'))
+        model.save(os.path.join(sys.path[0],'saved_models',MODEL,MODEL + '.h5'))
+
+    elif MODEL == 'TD3':
+        n_actions = env.action_space.shape[-1]
+        # 适合于惯性系统控制的OU噪声
+        action_noise = OrnsteinUhlenbeckActionNoise(mean=np.zeros(n_actions), sigma=float(0.5) * np.ones(n_actions))
+
+        model_path = search_file(os.path.join(sys.path[0],'saved_models', MODEL), MODEL)
+        if len(model_path) > 0 and load:
+            model = TD3.load(model_path[0], 
+                            env=env,
+                            policy=CustomTD3Policy,
+                            action_noise=action_noise,
+                            # tensorboard_log='./tb_log',
+                            ) 
+        else:
+            model = TD3(policy=CustomTD3Policy,
+                        env=env,
+                        verbose=1,
+                        action_noise=action_noise,
+                        # tensorboard_log='./tb_log',
+                        )
+        # 训练步数
+        model.learn(total_timesteps=episode_steps,)
+        model.save(os.path.join(sys.path[0],'saved_models',MODEL, MODEL + '.h5'))
 
     obs = env.reset()
     # 实测模式

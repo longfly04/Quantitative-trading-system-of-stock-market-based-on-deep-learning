@@ -13,8 +13,9 @@ doc/DOC.md
 /tensorboard_log
 /pandas
 /.vscode
-/saved_models
-/saved_results
+quantitative_analysis_with_deep_learning/saved_models
+quantitative_analysis_with_deep_learning/saved_results
+quantitative_analysis_with_deep_learning/saved_figures
 /doc
 /dataset
 /output

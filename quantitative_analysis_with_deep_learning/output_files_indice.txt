@@ -12,3 +12,8 @@ ddpg文件夹、ppo文件件、td3文件夹和output文件夹中，分别为模�
 	原始DDPG，	Deep policy：Mlp [128,128, 64, 64]，	accumulated reward with potential and mdd（decay rate 0.99），	timesteps：50 * 1000
 031203：
 	原始DDPG，	Deep policy：Mlp [128,128, 64, 64]，	target reward: target=1.6，	timesteps：50 * 15000
+
+031301：
+	原始TD3		Deep policy：Mlp [128,128, 64, 64]，		accumulated reward with potential，	timesteps：50 * 1000
+031302：
+	
