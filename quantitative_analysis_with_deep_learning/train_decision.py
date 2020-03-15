@@ -5,12 +5,13 @@ import random
 import os,sys
 import gym
 
-from stable_baselines import DDPG, PPO1, TD3
+from stable_baselines import DDPG, PPO1, TD3, HER
 from stable_baselines.common.noise import NormalActionNoise,OrnsteinUhlenbeckActionNoise, AdaptiveParamNoiseSpec
 from stable_baselines.common.vec_env import DummyVecEnv
 from stable_baselines.common.policies import MlpPolicy, LstmPolicy
 from stable_baselines.ddpg.policies import MlpPolicy as DDPG_MlpPolicy
 from stable_baselines.td3.policies import MlpPolicy as TD3_MlpPolicy
+from stable_baselines.her import GoalSelectionStrategy, HERGoalEnvWrapper
 from stable_baselines.common.env_checker import check_env
 from portfolio_trade.policy.custom_policy import CustomDDPGPolicy, CustomTD3Policy
 
@@ -112,12 +113,12 @@ def train_decision( config=None,
         if len(model_path) > 0 and load:
             model = TD3.load(model_path[0], 
                             env=env,
-                            policy=CustomTD3Policy,
+                            policy=TD3_MlpPolicy,
                             action_noise=action_noise,
                             # tensorboard_log='./tb_log',
                             ) 
         else:
-            model = TD3(policy=CustomTD3Policy,
+            model = TD3(policy=TD3_MlpPolicy,
                         env=env,
                         verbose=1,
                         action_noise=action_noise,
@@ -128,8 +129,24 @@ def train_decision( config=None,
         model.save(os.path.join(sys.path[0],'saved_models',MODEL, MODEL + '.h5'))
 
     elif MODEL == "HER":
-        """"""
-        
+        """
+        env必须是GoalEnv
+        """
+        model_class = DDPG
+
+        # Available strategies (cf paper): future, final, episode, random
+        goal_selection_strategy = 'future' # equivalent to GoalSelectionStrategy.FUTURE
+
+        # Wrap the model
+        model = HER(policy=CustomDDPGPolicy, 
+                    env=env, 
+                    model_class=model_class, 
+                    n_sampled_goal=4, 
+                    goal_selection_strategy=goal_selection_strategy,
+                    verbose=1
+                    )
+        model.learn(total_timesteps=episode_steps,)
+        model.save(os.path.join(sys.path[0],'saved_models', MODEL, MODEL + '.h5'))
 
     obs = env.reset()
     # 实测模式

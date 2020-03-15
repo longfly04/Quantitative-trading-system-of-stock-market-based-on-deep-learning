@@ -471,11 +471,10 @@ class PortfolioManager(object):
         # 含有MDD风险指标的奖励函数，积累奖励为带积累奖励函数
         accumulated_reward_with_mdd = accumulated_reward / (1 + mdd_of_reward * gamma ** steps)
 
-        # 目标导向奖励 1.6为160%的收益率
-        target = 1.6
-        # 使用算数平均值，势能奖励较容易获得高额收益，MDD风险奖励较容易实现小的回撤
-        # 在初始值1和目标target之间，使用算数平均值平均势能奖励和MDD风险奖励
-        self.target_reward = accumulated_reward_with_potential * (target - self.target_reward)/(target - 1) + accumulated_reward_with_mdd * (self.target_reward - 1)/(target - 1)
+        # 目标导向奖励 0.6为60%的收益率
+        target = 0.6
+        # 
+        self.target_reward = (accumulated_reward - 1) / target
 
         info = {
             "order_history":order_history,          # 今日成交订单
@@ -541,8 +540,8 @@ class PortfolioManager(object):
         # 定义资产分配比例
         self.W0 = self.A0 / self.A0.sum()
 
-        # 初始化目标导向奖励为1
-        self.target_reward = 1
+        # 初始化目标导向奖励为0
+        self.target_reward = 0
 
         return self.P0, self.V0, self.W0, info
 
@@ -731,16 +730,22 @@ class Portfolio_Prediction_Env(gym.GoalEnv):
         obs_space_shape = [(self.quotation_mgr.quotation_shape[0] + self.quotation_mgr.prediction_shape[0]) * self.n_asset]
         obs_space_low = -100 * np.ones(shape=obs_space_shape)
         obs_space_high = 100 * np.ones(shape=obs_space_shape)
-        # 已经达到的目标：P，V，W
-        achieved_goal_shape = (3, self.n_asset + 1)
+
+        # 假设资产收益的上限是10倍
+        # 已经达到的目标：At
+        achieved_goal_shape = (self.n_asset + 1)
         achieved_goal_low = np.zeros(shape=achieved_goal_shape)
-        achieved_goal_high = self.init_asset * np.ones(shape=achieved_goal_shape)
-        # 计划达到的目标：A
+        achieved_goal_high = 10 * np.ones(shape=achieved_goal_shape)
+
+        # 计划达到的目标：target reward * A0
         desired_goal_shape = (self.n_asset + 1, )
         desired_goal_low = np.zeros(shape=desired_goal_shape)
-        desired_goal_high = self.init_asset * np.ones(shape=desired_goal_shape)
+        desired_goal_high = 10 * np.ones(shape=desired_goal_shape)
 
-        
+        # 目标收益率
+        self.target_reward = 1.6
+
+        # DDPG TD3
         self.observation_space = Box(low=obs_space_low, high=obs_space_high,)
 
         # 使用GoalEnv时，需要定义achieved_goal，和desired_goal，仅在HER算法下使用
@@ -809,7 +814,9 @@ class Portfolio_Prediction_Env(gym.GoalEnv):
         return obs
 
     def compute_reward(self, achieved_goal, desired_goal, info):
-        """"""
+        """
+        使用achieved_goal，desired_goal计算出reward，必须与环境step中得到的reward一致
+        """
         return info['reward']  
 
 
@@ -1009,12 +1016,12 @@ class LivePlotNotebook(object):
 
 
 
-def sharpe(returns, freq=30, rfr=0.0):
+def sharpe(returns, freq=250, rfr=0.02):
     """
     夏普比率
-    Given a set of returns, calculates naive (rfr=0) sharpe (eq 28) 
+    
     """
-    return (np.sqrt(freq) * np.mean(returns)) / (np.std(returns) + 1e-7)
+    return (np.sqrt(freq) * np.mean(np.array(returns) - np.array(rfr))) / (np.std(np.array(returns) - np.array(rfr)) + 1e-7)
 
 
 def max_drawdown(X):

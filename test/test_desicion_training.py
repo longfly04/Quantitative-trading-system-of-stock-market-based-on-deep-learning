@@ -53,7 +53,7 @@ def main():
                         stop_date=choose_range[-1].date(),
                         load=True,
                         episode_steps=5000,
-                        model='DDPG'
+                        model='TD3'
                         )
 
 
