@@ -79,6 +79,7 @@ import pandas as pd
 import numpy as np 
 import arrow
 import random
+from sklearn.metrics import mean_squared_error as MSE
 
 from utils.data_process import DataProcessor 
 from vnpy.trader.constant import Status, Direction
@@ -471,10 +472,16 @@ class PortfolioManager(object):
         # 含有MDD风险指标的奖励函数，积累奖励为带积累奖励函数
         accumulated_reward_with_mdd = accumulated_reward / (1 + mdd_of_reward * gamma ** steps)
 
-        # 目标导向奖励 0.6为60%的收益率
-        target = 0.6
-        # 
-        self.target_reward = (accumulated_reward - 1) / target
+        # 目标导向奖励 1.6为60%的收益率
+        # target = self.config['training']['target_reward']
+        # 积累奖励=1时，target reward=0;积累奖励=1+target时,target reward=1；积累奖励>1+target时,target reward<1
+        '''
+        if accumulated_reward <= 1 + target:
+            self.target_reward = (accumulated_reward - 1) / target
+        else:
+            self.target_reward = 1 / (accumulated_reward - target)
+        '''
+
 
         info = {
             "order_history":order_history,          # 今日成交订单
@@ -487,7 +494,7 @@ class PortfolioManager(object):
             "sharpe_of_reward":sharpe_of_reward,
             "mdd_of_reward":mdd_of_reward,
             "accumulated_reward_with_mdd":accumulated_reward_with_mdd,
-            "target_reward":self.target_reward,
+            # "target_reward":self.target_reward,
             "asset_vector":{
                             "P1":P1, 
                             "V1":V1, 
@@ -539,9 +546,6 @@ class PortfolioManager(object):
         self.A0 = self.P0 * self.V0
         # 定义资产分配比例
         self.W0 = self.A0 / self.A0.sum()
-
-        # 初始化目标导向奖励为0
-        self.target_reward = 0
 
         return self.P0, self.V0, self.W0, info
 
@@ -740,22 +744,19 @@ class Portfolio_Prediction_Env(gym.GoalEnv):
         # 计划达到的目标：target reward * A0
         desired_goal_shape = (self.n_asset + 1, )
         desired_goal_low = np.zeros(shape=desired_goal_shape)
-        desired_goal_high = 10 * np.ones(shape=desired_goal_shape)
-
-        # 目标收益率
-        self.target_reward = 1.6
-
-        # DDPG TD3
-        self.observation_space = Box(low=obs_space_low, high=obs_space_high,)
+        desired_goal_high = (1 + self.config['training']['target_reward']) * np.ones(shape=desired_goal_shape)
 
         # 使用GoalEnv时，需要定义achieved_goal，和desired_goal，仅在HER算法下使用
-        '''
-        self.observation_space = Dict({
-            'observation':Box(low=obs_space_low, high=obs_space_high,), 
-            'achieved_goal':Box(low=achieved_goal_low, high=achieved_goal_high, ),
-            'desired_goal': Box(low=desired_goal_low, high=desired_goal_high, ),
-        })
-        '''
+        if self.config['training']['env_mode'] == 'goal':
+            self.observation_space = Dict({
+                'observation':Box(low=obs_space_low, high=obs_space_high,), 
+                'achieved_goal':Box(low=achieved_goal_low, high=achieved_goal_high, ),
+                'desired_goal': Box(low=desired_goal_low, high=desired_goal_high, ),
+            })
+        else:
+            # DDPG TD3
+            self.observation_space = Box(low=obs_space_low, high=obs_space_high,)
+        
         self.reset()
 
 
@@ -773,12 +774,12 @@ class Portfolio_Prediction_Env(gym.GoalEnv):
         P1, V1, W1, info2 = self.portfolio_mgr._step(offer, W, info1['high_low_price'], step_date)
 
         obs = np.vstack((quotation, prediction)).reshape(-1)
-        achieved_goal = np.vstack((P1, V1, W1))
+        achieved_goal = P1 * V1
 
         observation = {
             'observation':obs,
             'achieved_goal':achieved_goal,
-            'desired_goal': P1 * V1,
+            'desired_goal': self.desired_goal
         }
 
         info = dict(info1, **info2)
@@ -787,9 +788,15 @@ class Portfolio_Prediction_Env(gym.GoalEnv):
         if info['current_date'] >= self.decision_daterange[-1]:
             info['done'] = True
 
+        info['target_reward'] = reward_func(info['accumulated_reward'], self.config['training']['target_reward'])
+
         self.infos.append(info)
 
-        return obs, info['accumulated_reward_with_potential'], info['done'], info
+        # 在Goal环境下，需要返回reward target作为奖励函数
+        if self.config['training']['env_mode'] == 'goal':
+            return observation, info['target_reward'], info['done'], info
+        else:
+            return obs, info['target_reward'], info['done'], info
 
 
     def reset(self,):
@@ -803,21 +810,31 @@ class Portfolio_Prediction_Env(gym.GoalEnv):
         self.infos = [info]
 
         obs = np.vstack((quotation, prediction)).reshape(-1)
-        achieved_goal = np.vstack((P, V, W))
+
+        achieved_goal = P * V
+        self.desired_goal = (self.config['training']['target_reward']) * achieved_goal
 
         observation = {
             'observation':obs,
             'achieved_goal':achieved_goal,
-            'desired_goal': P * V,
+            'desired_goal': self.desired_goal
         }
 
-        return obs
+        if self.config['training']['env_mode'] == 'goal':
+            return observation
+        else:
+            return obs
 
     def compute_reward(self, achieved_goal, desired_goal, info):
         """
         使用achieved_goal，desired_goal计算出reward，必须与环境step中得到的reward一致
         """
-        return info['reward']  
+        # 积累奖励=1时，target reward=0;积累奖励=1+target时,target reward=1；积累奖励>1+target时,target reward<1
+        accumulated_reward = achieved_goal.sum() / self.init_asset
+
+        reward = reward_func(accumulated_reward, self.config['training']['target_reward'])
+
+        return reward
 
 
     def render(self, mode='human', info=None):
@@ -1037,3 +1054,17 @@ def max_drawdown(X):
         if dd > mdd:
             mdd = dd
     return mdd
+
+
+def reward_func(x, reward):
+    """
+    设计了一个奖励函数y = f(x)，满足：
+        1.在 x = reward 时，f(x) 取得最大值1，且只有这一个最大值
+        2.在 x = 1时，f(x) = 0
+        3.在定义域内全部平滑可导
+        4.在 x < 1 时，f(x)为负数，导数为正数，而且随着x变小，导数变大
+        5.在 x > reward 时，f(x) -> 0 ，恒为正数
+    """
+    w = (np.e - 1) * (x - 1)/ (reward - 1) + 1
+
+    return np.e * np.log(w) / w

@@ -20,4 +20,10 @@ ddpg文件夹、ppo文件件、td3文件夹和output文件夹中，分别为模�
 031303：
 	原始DDPG	Deep policy：Mlp [256,128, 128, 64]，		accumulated reward with potential，	timesteps：50 * 5000
 031401：
-	原始TD3		Deep policy：Mlp [64, 64]，		accumulated reward with potential，	timesteps：50 * 5000
+	原始TD3		原始 policy：Mlp [64, 64]，		accumulated reward with potential，	timesteps：50 * 5000
+031501
+	HER（DDPG）	Deep policy：Mlp [256,128, 128, 64]，	target reward: target=accumulated - MSE	timesteps：50 * 5000
+031502：
+	HER（DDPG）	原始 policy：Mlp [64, 64]，	target reward: target=accumulated - MSE	timesteps：50 * 5000
+031503：
+	TD3		Deep policy：Mlp [256,128, 128, 64]	target reward: target=accumulated - MSE	timesteps：100 * 2000

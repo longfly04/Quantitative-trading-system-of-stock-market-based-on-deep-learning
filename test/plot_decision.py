@@ -18,7 +18,7 @@ def main():
     
     path = os.path.join(sys.path[0], 'output')
     # 存档路径
-    archive_path = os.path.join(path, '031202')
+    archive_path = os.path.join(path, '031502')
     # 以上证50为参考
     ref_index = search_file(path, '000016.SH')
 
@@ -34,7 +34,7 @@ def main():
     order_list = [pd.read_csv(i, index_col=0) for i in order_list]
     portfolio_list = [pd.read_csv(i, index_col=0) for i in portfolio_list]
 
-    plot_statistics(statistics_list, reference=ref_index, save=False)
+    # plot_statistics(statistics_list, reference=ref_index, save=False)
     plot_order(order_list)
     plot_portfolio(portfolio_list, save=False, stock_list=config['data']['stock_code'])
 
@@ -43,7 +43,9 @@ def plot_statistics(data_list=None, reference=None, save=True):
     """
     总资产变化情况
     """
-    sns.set(style="white", palette="muted", color_codes=True)
+    with open('config.json', 'r', encoding='utf-8') as f:
+        config = json.load(f)
+    episode_steps = config['training']['episode_steps']
 
     plot_data_col = ['accumulated_reward','reward','sharpe_of_reward','mdd_of_reward']
     save_path = os.path.join(sys.path[0], 'saved_figures')
@@ -57,7 +59,7 @@ def plot_statistics(data_list=None, reference=None, save=True):
     # 绘制各个数据的增长情况
     for data,_ in zip(data_list, range(len(data_list))):
         data.set_index(pd.Series([arrow.get(j, 'YYYY-MM-DD').date() for j in data['current_date'].values]), inplace=True)
-        plt.plot(data[plot_data_col[0]], alpha=0.5 , label='Training %d iterations' %((_+1)*50000))
+        plt.plot(data[plot_data_col[0]], alpha=0.5 , label='Training %d iterations' %((_+1)*5*episode_steps))
         if data.index.values[0] < index_low:
             index_low = data.index.values[0]
         if data.index.values[-1] > index_high:
@@ -77,7 +79,7 @@ def plot_statistics(data_list=None, reference=None, save=True):
     plt.figure(figsize=(16,10), dpi=160)
     plt.title("Single investment yield")
     for data,_ in zip(data_list, range(len(data_list))):
-        plt.bar(data.index.values, data[plot_data_col[1]], alpha=0.5, label='Training %d iterations' %((_+1)*5000))
+        plt.bar(data.index.values, data[plot_data_col[1]], alpha=0.5, label='Training %d iterations' %((_+1)*5*episode_steps))
     plt.legend()
     if save:
         plt.savefig(os.path.join(save_path,'62_Single_investment_yield.png'))
@@ -97,7 +99,7 @@ def plot_statistics(data_list=None, reference=None, save=True):
 
     ax = plt.subplot(1,1,1)
     ax2 = ax.twinx()
-    x = range(10)
+    x = range(len(data_list))
     ax.plot(sharp_data, label='sharpe ratio', c='orange', alpha=0.8)
     ax.fill_between(x,sharp_data,color='orange', alpha=0.1)
     ax2.plot(mdd_data, label='max drawdown', c='green', alpha=0.8)
@@ -119,11 +121,13 @@ def plot_portfolio(data_list=None, save=False, stock_list=None):
 
     stackplot
     """
+    sns.set(style="white", palette="muted", color_codes=True)
+
     save_path = os.path.join(sys.path[0], 'saved_figures')
     plt.figure(figsize=(16,10), dpi=160)
     plt.title("Portfolio Distribution")
 
-    data = data_list[2]
+    data = data_list[-9]
 
     plot_data = data[[col for col in data.columns.values if col.startswith('A1_')]]
     x = [arrow.get(i,'YYYY-MM-DD').date() for i in plot_data.index.values]
@@ -134,7 +138,7 @@ def plot_portfolio(data_list=None, save=False, stock_list=None):
     y_list = [plot_data['A1_'+col].values for col in y_label]
 
     plt.stackplot(x, y_list[0], y_list[1],y_list[2],y_list[3],y_list[4],y_list[5],labels=y_label, alpha=0.6,
-                    colors=['red', 'green',  'cyan', 'purple','olive','orange', ])
+                    colors=['red', 'orange','green',  'cyan', 'blue','purple', ])
 
     plt.legend()
     if save:

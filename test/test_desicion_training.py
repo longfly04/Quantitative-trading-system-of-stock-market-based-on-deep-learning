@@ -35,7 +35,7 @@ def main():
     train_len = 200
 
     # 随机在整个训练周期内挑选时间段训练，时间长度为train_len天
-    for _ in range(50):
+    for _ in range(100):
         choose_start = random.choice(global_training_range[:-train_len])
         choose_range = [i for i in global_training_range if i >= choose_start][:train_len]
 
@@ -52,8 +52,8 @@ def main():
                         start_date=choose_start.date(),
                         stop_date=choose_range[-1].date(),
                         load=True,
-                        episode_steps=5000,
-                        model='TD3'
+                        episode_steps=config['training']['episode_steps'],
+                        model='HER' if config['training']['env_mode'] == 'goal' else "TD3"
                         )
 
 
