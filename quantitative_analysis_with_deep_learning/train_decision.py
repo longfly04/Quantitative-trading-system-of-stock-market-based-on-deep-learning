@@ -113,12 +113,12 @@ def train_decision( config=None,
         if len(model_path) > 0 and load:
             model = TD3.load(model_path[0], 
                             env=env,
-                            policy=CustomDDPGPolicy,
+                            policy=CustomTD3Policy,
                             action_noise=action_noise,
                             # tensorboard_log='./tb_log',
                             ) 
         else:
-            model = TD3(policy=CustomDDPGPolicy,
+            model = TD3(policy=CustomTD3Policy,
                         env=env,
                         verbose=1,
                         action_noise=action_noise,

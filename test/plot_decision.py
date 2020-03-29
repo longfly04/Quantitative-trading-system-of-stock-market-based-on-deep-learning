@@ -34,9 +34,9 @@ def main():
     order_list = [pd.read_csv(i, index_col=0) for i in order_list]
     portfolio_list = [pd.read_csv(i, index_col=0) for i in portfolio_list]
 
-    # plot_statistics(statistics_list, reference=ref_index, save=False)
+    plot_statistics(statistics_list, reference=ref_index, save=True)
     plot_order(order_list)
-    plot_portfolio(portfolio_list, save=False, stock_list=config['data']['stock_code'])
+#    plot_portfolio(portfolio_list, save=True, stock_list=config['data']['stock_code'])
 
 
 def plot_statistics(data_list=None, reference=None, save=True):
@@ -67,9 +67,9 @@ def plot_statistics(data_list=None, reference=None, save=True):
     plt.legend()
 
     # 绘制参考的上证综指情况
-    plot_index = reference.loc[index_low:index_high]
-    plt.plot(plot_index['close'] / plot_index['close'].loc[index_low] ,label='SH50 Index')
-    plt.legend()
+    #plot_index = reference.loc[index_low:index_high]
+    #plt.plot(plot_index['close'] / plot_index['close'].loc[index_low] ,label='SH50 Index')
+    #plt.legend()
 
     if save:
         plt.savefig(os.path.join(save_path,'61_Growth_in_total_assets.png'))
@@ -124,26 +124,26 @@ def plot_portfolio(data_list=None, save=False, stock_list=None):
     sns.set(style="white", palette="muted", color_codes=True)
 
     save_path = os.path.join(sys.path[0], 'saved_figures')
-    plt.figure(figsize=(16,10), dpi=160)
-    plt.title("Portfolio Distribution")
+    
+    for data,_ in zip(data_list,range(len(data_list))):
+        plt.figure(figsize=(16,10), dpi=160)
+        plt.title("Portfolio Distribution")
 
-    data = data_list[-9]
+        plot_data = data[[col for col in data.columns.values if col.startswith('A1_')]]
+        x = [arrow.get(i,'YYYY-MM-DD').date() for i in plot_data.index.values]
+        plot_data = plot_data.set_index(pd.Series(x))
+        y_label = ['position'] + stock_list
+        assert len(y_label) == plot_data.shape[-1]
 
-    plot_data = data[[col for col in data.columns.values if col.startswith('A1_')]]
-    x = [arrow.get(i,'YYYY-MM-DD').date() for i in plot_data.index.values]
-    plot_data = plot_data.set_index(pd.Series(x))
-    y_label = ['position'] + stock_list
-    assert len(y_label) == plot_data.shape[-1]
+        y_list = [plot_data['A1_'+col].values for col in y_label]
 
-    y_list = [plot_data['A1_'+col].values for col in y_label]
+        plt.stackplot(x, y_list[0], y_list[1],y_list[2],y_list[3],y_list[4],y_list[5],labels=y_label, alpha=0.6,
+                        colors=['red', 'orange','green',  'cyan', 'blue','purple', ])
 
-    plt.stackplot(x, y_list[0], y_list[1],y_list[2],y_list[3],y_list[4],y_list[5],labels=y_label, alpha=0.6,
-                    colors=['red', 'orange','green',  'cyan', 'blue','purple', ])
-
-    plt.legend()
-    if save:
-        plt.savefig(os.path.join(save_path,'65_Portfolio_Distribution.png'))
-    plt.show()
+        plt.legend()
+        if save:
+            plt.savefig(os.path.join(save_path,'65_Portfolio_Distribution-'+str(_)+'.png'))
+        # plt.show()
 
 
 def plot_order(data_list=None):
