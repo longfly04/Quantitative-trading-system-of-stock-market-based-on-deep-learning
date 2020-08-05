@@ -16,9 +16,10 @@ doc/DOC.md
 quantitative_analysis_with_deep_learning/saved_models
 quantitative_analysis_with_deep_learning/saved_results
 quantitative_analysis_with_deep_learning/saved_figures
-/doc
+/docs
 /dataset
 /output
 /well_trained
+
 
 
